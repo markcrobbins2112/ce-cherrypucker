@@ -53,5 +53,6 @@
 		"quickInputList.focusForeground": "#0099FFFF",
 		"minimap.background": "#00000000",
 		"scrollbar.shadow": "#00000000"
-	}
+	},
+	"editor.glyphMargin": true
 }
