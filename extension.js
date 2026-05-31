@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const jsonc = require('jsonc-parser');
 const fs = require('fs');
 const path = require('path');
+const JSON_EDITOR_WHEN = 'editorTextFocus && (editorLangId == json || editorLangId == jsonc)';
 
 function resolvePath(obj, path) {
 	if (obj == null) return undefined;
@@ -25,44 +26,86 @@ function notifyClipboard(action, text) {
 }
 
 const SUGGESTED_KEYBINDINGS = [
-	{ command: 'cherryPucker.copyObject', key: 'alt+insert o', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyObjectsFromArrayByPropertyValue', key: 'alt+insert ctrl+v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyObjectValue', key: 'insert v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyObjectValueQuoted', key: 'insert shift+v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyProperty', key: 'alt+insert alt+p', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyPropertyName', key: 'alt+insert alt+n', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyPropertyValue', key: 'alt+insert alt+v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate1', key: 'alt+insert shift+1', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate10', key: 'alt+insert shift+0', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate2', key: 'alt+insert shift+2', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate3', key: 'alt+insert shift+3', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate4', key: 'alt+insert shift+4', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate5', key: 'alt+insert shift+5', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate6', key: 'alt+insert shift+6', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate7', key: 'alt+insert shift+7', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate8', key: 'alt+insert shift+8', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.copyTemplate9', key: 'alt+insert shift+9', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.cutObjectsFromArrayByPropertyValue', key: 'alt+delete ctrl+x', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.deleteObjectsFromArrayByPropertyValue', key: 'alt+delete ctrl+v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.deleteProperty', key: 'alt+delete p', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.deletePropertyName', key: 'alt+delete n', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.deletePropertyValue', key: 'alt+delete v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.dupeObject', key: 'alt+insert ctrl+d', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.dupeProperty', key: 'alt+insert p', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.jumpToPropertyName', key: 'insert n', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.movePropertyDown', key: 'ctrl+alt+shift+down', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.movePropertyUp', key: 'ctrl+alt+shift+up', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.pastePropertyName', key: 'alt+insert n', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.pastePropertyNameAndSelect', key: 'alt+insert shift+n', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.pastePropertyValue', key: 'alt+insert v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.pastePropertyValueAndSelect', key: 'alt+insert shift+v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.setObjectsArrayPropertyValue', key: 'alt+insert ctrl+alt+v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.showPickerForAllCommands', key: 'alt+` f12', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.sortObjectArrayByPropertyValueAscending', key: 'alt+insert ctrl+alt+v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.sortObjectArrayByPropertyValueDescending', key: 'alt+insert ctrl+alt+shift+v', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.sortObjectProperties', key: 'alt+insert ctrl+p', when: 'editorTextFocus' },
-	{ command: 'cherryPucker.sortObjectPropertiesDeep', key: 'alt+insert ctrl+shift+p', when: 'editorTextFocus' },
+	{ command: 'cherryPucker.copyObject', key: 'alt+insert o', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyObjectsFromArrayByPropertyValue', key: 'alt+insert ctrl+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyObjectValue', key: 'insert v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyObjectValueQuoted', key: 'insert shift+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyProperty', key: 'alt+insert alt+p', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyPropertyName', key: 'alt+insert alt+n', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyPropertyValue', key: 'alt+insert alt+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate1', key: 'alt+insert shift+1', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate10', key: 'alt+insert shift+0', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate2', key: 'alt+insert shift+2', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate3', key: 'alt+insert shift+3', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate4', key: 'alt+insert shift+4', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate5', key: 'alt+insert shift+5', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate6', key: 'alt+insert shift+6', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate7', key: 'alt+insert shift+7', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate8', key: 'alt+insert shift+8', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.copyTemplate9', key: 'alt+insert shift+9', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.cutObjectsFromArrayByPropertyValue', key: 'alt+delete ctrl+x', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.deleteObjectsFromArrayByPropertyValue', key: 'alt+delete ctrl+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.deleteProperty', key: 'alt+delete p', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.deletePropertyName', key: 'alt+delete n', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.deletePropertyValue', key: 'alt+delete v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.dupeObject', key: 'alt+insert ctrl+d', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.dupeProperty', key: 'alt+insert p', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.jumpToPropertyName', key: 'insert n', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.movePropertyDown', key: 'ctrl+alt+shift+down', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.movePropertyUp', key: 'ctrl+alt+shift+up', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.pastePropertyName', key: 'alt+insert n', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.pastePropertyNameAndSelect', key: 'alt+insert shift+n', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.pastePropertyValue', key: 'alt+insert v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.pastePropertyValueAndSelect', key: 'alt+insert shift+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.setObjectsArrayPropertyValue', key: 'alt+insert ctrl+alt+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.showPickerForAllCommands', key: 'alt+` f12', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.sortObjectArrayByPropertyValueAscending', key: 'alt+insert ctrl+alt+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.sortObjectArrayByPropertyValueDescending', key: 'alt+insert ctrl+alt+shift+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.sortObjectProperties', key: 'alt+insert ctrl+p', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.sortObjectPropertiesDeep', key: 'alt+insert ctrl+shift+p', when: JSON_EDITOR_WHEN },
 ];
+
+const COMMAND_TITLE_BY_ID = {
+	'cherryPucker.copyTemplate1': 'CherryPucker: Copy Template 1',
+	'cherryPucker.copyTemplate2': 'CherryPucker: Copy Template 2',
+	'cherryPucker.copyTemplate3': 'CherryPucker: Copy Template 3',
+	'cherryPucker.copyTemplate4': 'CherryPucker: Copy Template 4',
+	'cherryPucker.copyTemplate5': 'CherryPucker: Copy Template 5',
+	'cherryPucker.copyTemplate6': 'CherryPucker: Copy Template 6',
+	'cherryPucker.copyTemplate7': 'CherryPucker: Copy Template 7',
+	'cherryPucker.copyTemplate8': 'CherryPucker: Copy Template 8',
+	'cherryPucker.copyTemplate9': 'CherryPucker: Copy Template 9',
+	'cherryPucker.copyTemplate10': 'CherryPucker: Copy Template 10',
+	'cherryPucker.copyObjectValue': 'CherryPucker: Copy Object Value',
+	'cherryPucker.copyObjectValueQuoted': 'CherryPucker: Copy Object Value (Quoted)',
+	'cherryPucker.copyPropertyValue': 'CherryPucker: Copy Property Value',
+	'cherryPucker.pastePropertyValue': 'CherryPucker: Paste Property Value',
+	'cherryPucker.pastePropertyValueAndSelect': 'CherryPucker: Paste Property Value and Select',
+	'cherryPucker.deletePropertyValue': 'CherryPucker: Delete Property Value',
+	'cherryPucker.jumpToPropertyName': 'CherryPucker: Jump to Property Name',
+	'cherryPucker.copyPropertyName': 'CherryPucker: Copy Property Name',
+	'cherryPucker.pastePropertyName': 'CherryPucker: Paste Property Name',
+	'cherryPucker.pastePropertyNameAndSelect': 'CherryPucker: Paste Property Name and Select Value',
+	'cherryPucker.deletePropertyName': 'CherryPucker: Delete Property Name',
+	'cherryPucker.copyProperty': 'CherryPucker: Copy Property',
+	'cherryPucker.dupeProperty': 'CherryPucker: Duplicate Property',
+	'cherryPucker.copyObject': 'CherryPucker: Copy Object',
+	'cherryPucker.dupeObject': 'CherryPucker: Duplicate Object',
+	'cherryPucker.sortObjectProperties': 'CherryPucker: Sort Object Properties',
+	'cherryPucker.sortObjectPropertiesDeep': 'CherryPucker: Sort Object Properties (Deep)',
+	'cherryPucker.movePropertyUp': 'CherryPucker: Move Property Up',
+	'cherryPucker.movePropertyDown': 'CherryPucker: Move Property Down',
+	'cherryPucker.deleteProperty': 'CherryPucker: Delete Property',
+	'cherryPucker.sortObjectArrayByPropertyValueAscending': 'CherryPucker: Sort Object Array by Property Value (Ascending)',
+	'cherryPucker.sortObjectArrayByPropertyValueDescending': 'CherryPucker: Sort Object Array by Property Value (Descending)',
+	'cherryPucker.deleteObjectsFromArrayByPropertyValue': 'CherryPucker: Delete Objects From Array by Property Value',
+	'cherryPucker.copyObjectsFromArrayByPropertyValue': 'CherryPucker: Copy Objects From Array by Property Value',
+	'cherryPucker.cutObjectsFromArrayByPropertyValue': 'CherryPucker: Cut Objects From Array by Property Value',
+	'cherryPucker.setObjectsArrayPropertyValue': 'CherryPucker: Set Objects Array Property Value',
+	'cherryPucker.showPickerForAllCommands': 'CherryPucker: Show Picker for All Commands',
+	'cherryPucker.applySuggestedKeybindings': 'CherryPucker: Apply Suggested Keybindings',
+	'cherryPucker.removeSuggestedKeybindings': 'CherryPucker: Remove Suggested Keybindings',
+};
 
 function getUserKeybindingsPath() {
 	return path.join(process.env.APPDATA || '', 'Code', 'User', 'keybindings.json');
@@ -623,15 +666,21 @@ async function runArrayCommand(action) {
 }
 
 async function runShowPickerForAllCommands() {
-	const items = [
-		'cherryPucker.copyPropertyValue', 'cherryPucker.pastePropertyValue', 'cherryPucker.pastePropertyValueAndSelect', 'cherryPucker.deletePropertyValue',
-		'cherryPucker.jumpToPropertyName', 'cherryPucker.copyPropertyName', 'cherryPucker.pastePropertyName', 'cherryPucker.pastePropertyNameAndSelect',
-		'cherryPucker.deletePropertyName', 'cherryPucker.copyProperty', 'cherryPucker.dupeProperty', 'cherryPucker.movePropertyUp', 'cherryPucker.movePropertyDown',
-		'cherryPucker.deleteProperty', 'cherryPucker.copyObject', 'cherryPucker.dupeObject', 'cherryPucker.sortObjectProperties', 'cherryPucker.sortObjectPropertiesDeep',
-		'cherryPucker.sortObjectArrayByPropertyValueAscending', 'cherryPucker.sortObjectArrayByPropertyValueDescending',
-		'cherryPucker.deleteObjectsFromArrayByPropertyValue', 'cherryPucker.copyObjectsFromArrayByPropertyValue', 'cherryPucker.cutObjectsFromArrayByPropertyValue',
-		'cherryPucker.setObjectsArrayPropertyValue'
-	].map((c) => ({ label: c.replace('cherryPucker.', ''), command: c }));
+	const suggestedKeyMap = new Map();
+	for (const kb of SUGGESTED_KEYBINDINGS) {
+		const keys = suggestedKeyMap.get(kb.command) || [];
+		keys.push(kb.key);
+		suggestedKeyMap.set(kb.command, keys);
+	}
+	const items = Object.keys(COMMAND_TITLE_BY_ID).map((command) => {
+		const title = COMMAND_TITLE_BY_ID[command].replace(/^CherryPucker:\s*/, '');
+		const shortcuts = (suggestedKeyMap.get(command) || []).join(', ');
+		return {
+			label: title,
+			description: `<${shortcuts || 'no shortcut'}> :CherryPucker`,
+			command,
+		};
+	});
 	const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Run CherryPucker command' });
 	if (!picked) return;
 	await vscode.commands.executeCommand(picked.command);

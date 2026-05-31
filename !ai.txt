@@ -148,3 +148,9 @@ cherryPucker.pastePropertyValue, alt+insert v, existing: multiCommand.bumpAndSyn
 cherryPucker.pastePropertyValueAndSelect, alt+insert shift+v, existing: workbench.action.tasks.runTask
 cherryPucker.sortObjectArrayByPropertyValueAscending, alt+insert ctrl+alt+v, existing: cherryPucker.setObjectsArrayPropertyValue
 cherryPucker.sortObjectProperties, alt+insert ctrl+p, existing: projectManager.saveProject
+
+
+Phase 4:
+in addition to editorTextFocus when, add editorLangId == json || editorLangId == jsonc. also make the commands to remove and add bindings able to be bound to keys.
+for the picker of commands, suffix the items with '<shortcut keys> :CherryPucker' in ghost text. Use the command title without 'CherryPicker: ' prefix to title the command picker items.
+bump the version

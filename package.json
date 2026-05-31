@@ -2,10 +2,9 @@
 	"name": "cherrypucker",
 	"displayName": "CherryPucker",
 	"publisher": "markrobbins",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"description": "Copy JSON-driven templates and property values from the object your cursor is inside.",
 	"license": "MIT",
-	"main": "extension.js",
 	"engines": {
 		"vscode": "^1.70.0",
 		"node": ">=18"
@@ -29,6 +28,7 @@
 	"categories": [
 		"Other"
 	],
+	"main": "extension.js",
 	"files": [
 		"extension.js",
 		"README.md",
@@ -40,6 +40,14 @@
 		"lint": "echo \"No lint configured yet\"",
 		"test": "echo \"No tests configured yet\"",
 		"package": "vsce package"
+	},
+	"devDependencies": {
+		"@types/node": "^22.15.3",
+		"@types/vscode": "^1.70.0",
+		"@vscode/vsce": "^3.6.2"
+	},
+	"dependencies": {
+		"jsonc-parser": "^3.2.0"
 	},
 	"activationEvents": [
 		"onCommand:cherryPucker.copyTemplate1",
@@ -87,187 +95,187 @@
 			{
 				"command": "cherryPucker.copyTemplate1",
 				"title": "CherryPucker: Copy Template 1",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate2",
 				"title": "CherryPucker: Copy Template 2",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate3",
 				"title": "CherryPucker: Copy Template 3",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate4",
 				"title": "CherryPucker: Copy Template 4",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate5",
 				"title": "CherryPucker: Copy Template 5",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate6",
 				"title": "CherryPucker: Copy Template 6",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate7",
 				"title": "CherryPucker: Copy Template 7",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate8",
 				"title": "CherryPucker: Copy Template 8",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate9",
 				"title": "CherryPucker: Copy Template 9",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyTemplate10",
 				"title": "CherryPucker: Copy Template 10",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyObjectValue",
 				"title": "CherryPucker: Copy Object Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyObjectValueQuoted",
 				"title": "CherryPucker: Copy Object Value (Quoted)",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyPropertyValue",
 				"title": "CherryPucker: Copy Property Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.pastePropertyValue",
 				"title": "CherryPucker: Paste Property Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.pastePropertyValueAndSelect",
 				"title": "CherryPucker: Paste Property Value and Select",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.deletePropertyValue",
 				"title": "CherryPucker: Delete Property Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.jumpToPropertyName",
 				"title": "CherryPucker: Jump to Property Name",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyPropertyName",
 				"title": "CherryPucker: Copy Property Name",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.pastePropertyName",
 				"title": "CherryPucker: Paste Property Name",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.pastePropertyNameAndSelect",
 				"title": "CherryPucker: Paste Property Name and Select Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.deletePropertyName",
 				"title": "CherryPucker: Delete Property Name",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyProperty",
 				"title": "CherryPucker: Copy Property",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.dupeProperty",
 				"title": "CherryPucker: Duplicate Property",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyObject",
 				"title": "CherryPucker: Copy Object",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.dupeObject",
 				"title": "CherryPucker: Duplicate Object",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.sortObjectProperties",
 				"title": "CherryPucker: Sort Object Properties",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.sortObjectPropertiesDeep",
 				"title": "CherryPucker: Sort Object Properties (Deep)",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.movePropertyUp",
 				"title": "CherryPucker: Move Property Up",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.movePropertyDown",
 				"title": "CherryPucker: Move Property Down",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.deleteProperty",
 				"title": "CherryPucker: Delete Property",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.sortObjectArrayByPropertyValueAscending",
 				"title": "CherryPucker: Sort Object Array by Property Value (Ascending)",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.sortObjectArrayByPropertyValueDescending",
 				"title": "CherryPucker: Sort Object Array by Property Value (Descending)",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.deleteObjectsFromArrayByPropertyValue",
 				"title": "CherryPucker: Delete Objects From Array by Property Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.copyObjectsFromArrayByPropertyValue",
 				"title": "CherryPucker: Copy Objects From Array by Property Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.cutObjectsFromArrayByPropertyValue",
 				"title": "CherryPucker: Cut Objects From Array by Property Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.setObjectsArrayPropertyValue",
 				"title": "CherryPucker: Set Objects Array Property Value",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.showPickerForAllCommands",
 				"title": "CherryPucker: Show Picker for All Commands",
-				"enablement": "editorTextFocus"
+				"enablement": "editorTextFocus && (editorLangId == json || editorLangId == jsonc)"
 			},
 			{
 				"command": "cherryPucker.applySuggestedKeybindings",
@@ -333,13 +341,5 @@
 				}
 			}
 		}
-	},
-	"devDependencies": {
-		"@types/node": "^22.15.3",
-		"@types/vscode": "^1.70.0",
-		"@vscode/vsce": "^3.6.2"
-	},
-	"dependencies": {
-		"jsonc-parser": "^3.2.0"
 	}
 }
