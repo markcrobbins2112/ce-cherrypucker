@@ -1,5 +1,5 @@
 {
-	"name": "cherrypucker",
+	"name": "ce-cherrypucker",
 	"displayName": "CherryPucker",
 	"publisher": "markrobbins",
 	"version": "0.0.4",
@@ -12,11 +12,11 @@
 	"icon": "icon.png",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/markchristianrobbins/cherrypucker.git"
+		"url": "https://github.com/markcrobbins2112/ce-cherrypucker.git"
 	},
-	"homepage": "https://github.com/markchristianrobbins/cherrypucker",
+	"homepage": "https://github.com/markcrobbins2112/ce-cherrypucker",
 	"bugs": {
-		"url": "https://github.com/markchristianrobbins/cherrypucker/issues"
+		"url": "https://github.com/markcrobbins2112/ce-cherrypucker/issues"
 	},
 	"keywords": [
 		"json",
@@ -50,45 +50,6 @@
 		"jsonc-parser": "^3.2.0"
 	},
 	"activationEvents": [
-		"onCommand:cherryPucker.copyTemplate1",
-		"onCommand:cherryPucker.copyTemplate2",
-		"onCommand:cherryPucker.copyTemplate3",
-		"onCommand:cherryPucker.copyTemplate4",
-		"onCommand:cherryPucker.copyTemplate5",
-		"onCommand:cherryPucker.copyTemplate6",
-		"onCommand:cherryPucker.copyTemplate7",
-		"onCommand:cherryPucker.copyTemplate8",
-		"onCommand:cherryPucker.copyTemplate9",
-		"onCommand:cherryPucker.copyTemplate10",
-		"onCommand:cherryPucker.copyObjectValue",
-		"onCommand:cherryPucker.copyObjectValueQuoted",
-		"onCommand:cherryPucker.copyPropertyValue",
-		"onCommand:cherryPucker.pastePropertyValue",
-		"onCommand:cherryPucker.pastePropertyValueAndSelect",
-		"onCommand:cherryPucker.deletePropertyValue",
-		"onCommand:cherryPucker.jumpToPropertyName",
-		"onCommand:cherryPucker.copyPropertyName",
-		"onCommand:cherryPucker.pastePropertyName",
-		"onCommand:cherryPucker.pastePropertyNameAndSelect",
-		"onCommand:cherryPucker.deletePropertyName",
-		"onCommand:cherryPucker.copyProperty",
-		"onCommand:cherryPucker.dupeProperty",
-		"onCommand:cherryPucker.copyObject",
-		"onCommand:cherryPucker.dupeObject",
-		"onCommand:cherryPucker.sortObjectProperties",
-		"onCommand:cherryPucker.sortObjectPropertiesDeep",
-		"onCommand:cherryPucker.movePropertyUp",
-		"onCommand:cherryPucker.movePropertyDown",
-		"onCommand:cherryPucker.deleteProperty",
-		"onCommand:cherryPucker.sortObjectArrayByPropertyValueAscending",
-		"onCommand:cherryPucker.sortObjectArrayByPropertyValueDescending",
-		"onCommand:cherryPucker.deleteObjectsFromArrayByPropertyValue",
-		"onCommand:cherryPucker.copyObjectsFromArrayByPropertyValue",
-		"onCommand:cherryPucker.cutObjectsFromArrayByPropertyValue",
-		"onCommand:cherryPucker.setObjectsArrayPropertyValue",
-		"onCommand:cherryPucker.showPickerForAllCommands",
-		"onCommand:cherryPucker.applySuggestedKeybindings",
-		"onCommand:cherryPucker.removeSuggestedKeybindings"
 	],
 	"contributes": {
 		"commands": [
