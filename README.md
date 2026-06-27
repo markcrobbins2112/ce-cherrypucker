@@ -7,6 +7,9 @@ It can:
 - Copy a selected object value directly.
 - Copy a selected object value wrapped in quotes.
 
+![icon](icon.jpg)
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/markcrobbins)
+
 ## Installation
 
 Install from the VS Code Marketplace, or install a local `.vsix` package:
