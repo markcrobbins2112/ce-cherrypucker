@@ -33,7 +33,7 @@
 		"extension.js",
 		"README.md",
 		"LICENSE",
-		"icon2.png",
+		"icon.png",
 		"node_modules/jsonc-parser/**"
 	],
 	"scripts": {
