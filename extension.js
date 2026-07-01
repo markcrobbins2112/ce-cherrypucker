@@ -108,16 +108,42 @@ const COMMAND_TITLE_BY_ID = {
 };
 
 function getUserKeybindingsPath() {
-	return path.join(process.env.APPDATA || '', 'Code', 'User', 'keybindings.json');
+	// Detect if the active editor app is Cursor or VS Code
+	const isCursor = vscode.env.appName && vscode.env.appName.toLowerCase().includes('cursor');
+	
+	// Get base platform system directories
+	const home = process.env.HOME || process.env.USERPROFILE || '';
+	const appData = process.env.APPDATA;
+	const folderName = isCursor ? 'Cursor' : 'Code';
+
+	if (process.platform === 'win32') {
+		// Windows path fallback
+		return path.join(appData || path.join(home, 'AppData', 'Roaming'), folderName, 'User', 'keybindings.json');
+	} else if (process.platform === 'darwin') {
+		// macOS path location
+		return path.join(home, 'Library', 'Application Support', folderName, 'User', 'keybindings.json');
+	} else {
+		// Linux (.config) path location
+		return path.join(home, '.config', folderName, 'User', 'keybindings.json');
+	}
 }
 
 function readUserKeybindings() {
 	const kbPath = getUserKeybindingsPath();
-	if (!fs.existsSync(kbPath)) return { kbPath, bindings: [], raw: '' };
+	
+	// If the file doesn't exist yet, return empty data placeholders so we can safely generate it
+	if (!fs.existsSync(kbPath)) {
+		return { kbPath, bindings: [], raw: '' };
+	}
+	
 	const raw = fs.readFileSync(kbPath, 'utf8');
 	const parsed = jsonc.parse(raw);
-	if (!Array.isArray(parsed)) throw new Error('keybindings.json must contain a JSON array.');
-	return { kbPath, bindings: parsed, raw };
+	
+	if (parsed !== null && !Array.isArray(parsed)) {
+		throw new Error('keybindings.json must contain a JSON array.');
+	}
+	
+	return { kbPath, bindings: parsed || [], raw };
 }
 
 function getEditorIndentFallback() {
@@ -141,11 +167,20 @@ function detectIndentFromContent(raw) {
 	return null;
 }
 
+// 1. CHOOSE STRUCTURAL MUTATION FOR WRITING
 function writeUserKeybindings(kbPath, bindings, raw) {
-	const indent = detectIndentFromContent(raw) || getEditorIndentFallback();
-	fs.writeFileSync(kbPath, `${JSON.stringify(bindings, null, indent)}\n`, 'utf8');
+	// Fallback to standard write only if the file is completely new/empty
+	if (!raw || raw.trim() === '') {
+		const indent = getEditorIndentFallback();
+		fs.writeFileSync(kbPath, `${JSON.stringify(bindings, null, indent)}\n`, 'utf8');
+		return;
+	}
+	
+	// If the file already exists, we do NOT use this function to overwrite it anymore.
+	// Instead, we use jsonc.applyEdits inside the execution run block below.
 }
 
+// 2. UPDATE THE APPLY RUNNER TO USE JSONC EDITS
 async function runApplySuggestedBindings() {
 	try {
 		const { kbPath, bindings, raw } = readUserKeybindings();
@@ -153,19 +188,52 @@ async function runApplySuggestedBindings() {
 		const applied = [];
 		const duplicates = [];
 
+		// Create a mutable text block starting from the original raw file data
+		let updatedRawText = raw || '[]';
+
 		for (const suggested of SUGGESTED_KEYBINDINGS) {
-			const dup = existing.find((b) => String(b.key || '').toLowerCase() === suggested.key.toLowerCase());
-			if (dup) {
-				duplicates.push(`${suggested.command}, ${suggested.key}, existing: ${dup.command || '(unknown)'}`);
+			const exactDup = existing.find(
+				(b) => String(b.key || '').toLowerCase() === suggested.key.toLowerCase() &&
+				       String(b.command || '') === suggested.command
+			);
+			if (exactDup) continue;
+
+			const keyConflict = existing.find(
+				(b) => String(b.key || '').toLowerCase() === suggested.key.toLowerCase()
+			);
+			if (keyConflict) {
+				duplicates.push(`Conflict: ${suggested.command} needs "${suggested.key}", but it is already taken by "${keyConflict.command || 'unknown'}"`);
 				continue;
 			}
-			existing.push({ key: suggested.key, command: suggested.command, when: suggested.when });
+
+			// Calculate a structural insertion edit path at the end of the JSON array
+			const jsonFormattingOptions = { insertSpaces: true, tabSize: 4 };
+			const edits = jsonc.modify(updatedRawText, [existing.length], suggested, {
+				formattingOptions: jsonFormattingOptions
+			});
+
+			// Safely stitch the new keybinding item into the raw text string, preserving comments!
+			updatedRawText = jsonc.applyEdits(updatedRawText, edits);
+			
+			existing.push(suggested);
 			applied.push(suggested);
 		}
 
-		writeUserKeybindings(kbPath, existing, raw);
-		if (duplicates.length) await vscode.env.clipboard.writeText(duplicates.join('\n'));
-		vscode.window.showInformationMessage(`CherryPucker: Applied ${applied.length} suggested keybindings. Duplicates: ${duplicates.length}${duplicates.length ? ' (copied to clipboard)' : ''}`);
+		if (applied.length > 0) {
+			const dirPath = path.dirname(kbPath);
+			if (!fs.existsSync(dirPath)) {
+				fs.mkdirSync(dirPath, { recursive: true });
+			}
+			fs.writeFileSync(kbPath, updatedRawText, 'utf8');
+		}
+
+		if (duplicates.length) {
+			await vscode.env.clipboard.writeText(duplicates.join('\n'));
+		}
+
+		vscode.window.showInformationMessage(
+			`CherryPucker: Applied ${applied.length} keybindings. Conflicts skipped: ${duplicates.length}${duplicates.length ? ' (copied list to clipboard)' : ''}`
+		);
 	} catch (err) {
 		vscode.window.showErrorMessage(`CherryPucker: Failed to apply suggested keybindings: ${err.message}`);
 	}
