@@ -57,7 +57,7 @@ const SUGGESTED_KEYBINDINGS = [
 	{ command: 'cherryPucker.pastePropertyNameAndSelect', key: 'alt+insert shift+n', when: JSON_EDITOR_WHEN },
 	{ command: 'cherryPucker.pastePropertyValue', key: 'alt+insert v', when: JSON_EDITOR_WHEN },
 	{ command: 'cherryPucker.pastePropertyValueAndSelect', key: 'alt+insert shift+v', when: JSON_EDITOR_WHEN },
-	{ command: 'cherryPucker.setObjectsArrayPropertyValue', key: 'alt+insert ctrl+alt+v', when: JSON_EDITOR_WHEN },
+	{ command: 'cherryPucker.setObjectsArrayPropertyValue', key: 'insert ctrl+alt+v', when: JSON_EDITOR_WHEN },
 	{ command: 'cherryPucker.showPickerForAllCommands', key: 'alt+` f12', when: JSON_EDITOR_WHEN },
 	{ command: 'cherryPucker.sortObjectArrayByPropertyValueAscending', key: 'alt+insert ctrl+alt+v', when: JSON_EDITOR_WHEN },
 	{ command: 'cherryPucker.sortObjectArrayByPropertyValueDescending', key: 'alt+insert ctrl+alt+shift+v', when: JSON_EDITOR_WHEN },
