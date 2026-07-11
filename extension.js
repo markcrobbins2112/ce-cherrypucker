@@ -516,19 +516,19 @@ function formatWithBaseIndent(baseIndent, indentUnit, value) {
 	return json.split('\n').map((line, i) => (i === 0 ? line : `${baseIndent}${line}`)).join('\n');
 }
 
-async function runTemplateCommand() {
+async function runTemplateCommand(index) {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return vscode.window.showWarningMessage('CherryPucker: No active editor.');
 	
 	const originalSelections = editor.selections;
 
-	// 1. Gather active context using your standard AST tree parser helper
+	// 1. Parse active syntax trees using your core helper
 	const parsed = parseTreeWithNodeAtCursor(editor);
 	if (!parsed || !parsed.root) {
 		return vscode.window.showWarningMessage('CherryPucker: Failed to parse file structure.');
 	}
 
-	// 2. SELECTION-AWARE NODE COLLECTOR (Gathers all highlighted or multi-cursor object blocks)
+	// 2. SELECTION-AWARE MULTI-OBJECT COLLECTOR
 	let targetObjects = [];
 	const hasActiveSelection = editor.selections.some(s => !s.isEmpty);
 
@@ -545,7 +545,7 @@ async function runTemplateCommand() {
 		return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object or select object data.');
 	}
 
-	// Deduplicate by structural character offsets to strictly ban any overlapping ranges
+	// 3. REGISTRY DEDUPLICATION: Strict filter to protect against overlapping edit zones
 	const finalUniqueTargets = [];
 	const uniqueRangeRegistry = new Set();
 	for (const target of targetObjects) {
@@ -557,60 +557,38 @@ async function runTemplateCommand() {
 		}
 	}
 
-	// Sort targets top-to-bottom so they parse in correct natural visual sequence
+	// Sort targets top-to-bottom so they parse in correct chronological code order
 	const sortedTargets = [...finalUniqueTargets].sort((a, b) => a.node.offset - b.node.offset);
 
-	// 3. ZERO-PROMPT BLUEPRINT CAPTURE: Instantly grab your template blueprint pattern out of the active clipboard
-	const templateInput = await vscode.env.clipboard.readText();
-	if (!templateInput || !templateInput.trim()) {
-		return vscode.window.showWarningMessage('CherryPucker: Clipboard is empty. Copy a template pattern first (e.g. {"id": {{id}} }).');
+	// 4. FETCH USER CONFIGURATION SETTING BLUEPRINT
+	const template = vscode.workspace.getConfiguration('cherryPucker').get(`template${index}`, '');
+	if (!template || !template.trim()) {
+		return vscode.window.showWarningMessage(`CherryPucker: Configuration value for template${index} is empty.`);
 	}
 
-	// 4. GENERATION PIPELINE: Loop through targets and map values into your template
+	// 5. GENERATION PIPELINE: Loop through objects and gather text blocks
 	const generatedBlocks = [];
-	const indentUnit = getIndentUnit(editor);
-	const baseIndent = getLineIndent(editor.document, sortedTargets[0].node.offset);
 
 	for (const target of sortedTargets) {
 		const node = target.node;
-		const objValue = jsonc.getNodeValue(node);
-		if (!objValue || typeof objValue !== 'object' || Array.isArray(objValue)) continue;
+		const currentObjectValue = jsonc.getNodeValue(node);
+		if (!currentObjectValue || typeof currentObjectValue !== 'object' || Array.isArray(currentObjectValue)) continue;
 
-		// Substitute placeholders matching properties inside the current object instance
-		let substitutedText = templateInput.replace(/\{\{([^}]+)\}\}/g, (match, keyName) => {
-			const trimmedKey = keyName.trim();
-			if (objValue.hasOwnProperty(trimmedKey)) {
-				const val = objValue[trimmedKey];
-				return typeof val === 'object' ? JSON.stringify(val) : String(val);
-			}
-			return match; // Keep placeholder intact if missing in this particular object
-		});
-
-		// Parse and re-indent according to your workspace formatting rules
-		try {
-			const parsedSnippet = JSON.parse(substitutedText);
-			const formattedSnippet = formatWithBaseIndent(baseIndent, indentUnit, parsedSnippet);
-			generatedBlocks.push(formattedSnippet);
-		} catch (e) {
-			// Fallback: If it's a loose un-parsed fragment string, push raw text with base indent
-			generatedBlocks.push(baseIndent + substitutedText.trim());
+		const substitutedResult = substituteTemplate(template, currentObjectValue);
+		if (substitutedResult) {
+			generatedBlocks.push(substitutedResult.trim());
 		}
 	}
 
 	if (generatedBlocks.length === 0) return;
 
-	// Determine if the lowest object lives inside a parent JSON array block
-	const lowestNode = sortedTargets[sortedTargets.length - 1].node;
-	const insideArray = lowestNode.parent?.type === 'array';
+	// FIXED: Always concatenate generated template rows using raw newlines only, completely dropping commas
+	const combinedTemplateResult = generatedBlocks.join('\n');
 
-	// Join all newly stamped objects with structural newlines (and commas if inside an array context) [INDEX]
-	const combinedTemplateResult = generatedBlocks.join(insideArray ? ',\n' : '\n');
-
-	// 5. ATOMIC OPERATION EXECUTOR: Overwrite the clipboard with your new concatenated text block [INDEX]
+	// 6. ATOMIC OVERWRITE CLIPBOARD
 	await vscode.env.clipboard.writeText(combinedTemplateResult);
-	notifyClipboard(`Generated ${generatedBlocks.length} Template Copies`, combinedTemplateResult);
-	
-	// Restore selections cleanly
+	notifyClipboard(`Copied Template ${index}`, combinedTemplateResult);
+
 	editor.selections = originalSelections;
 }
 
@@ -816,18 +794,37 @@ async function runPropertyCommand(action) {
 
 	const clipboard = await vscode.env.clipboard.readText();
 
-	// ==========================================
-	// ACTION: COPY PROPERTY VALUE(S)
-	// ==========================================
-	if (action === 'copyPropertyValue') {
-		const lines = [];
+	// ========================================================
+	// ACTION: MULTI-CURSOR SAFE VALUE EXTRACTIONS
+	// ========================================================
+	if (action === 'copyPropertyValue' || action === 'copyObjectValue' || action === 'copyObjectValueQuoted') {
+		const isQuoted = action === 'copyObjectValueQuoted';
+		const extractedLines = [];
+
 		for (const o of rawObjectNodes) {
 			const p = findPropertyByKey(o, propName);
-			if (p) lines.push(formatValue(p.rawValue));
+			if (p) {
+				const val = p.rawValue;
+				
+				let formattedValue = '';
+				if (isQuoted) {
+					// Force strict JSON string double-quote wrapping onto every element row
+					formattedValue = typeof val === 'string' ? `"${val}"` : JSON.stringify(val);
+				} else {
+					// Naked sibling: dump unquoted strings or raw object shapes
+					formattedValue = typeof val === 'object' ? JSON.stringify(val) : String(val);
+				}
+				
+				extractedLines.push(formattedValue);
+			}
 		}
-		const text = lines.join('\n');
-		await vscode.env.clipboard.writeText(text);
-		notifyClipboard(`Copied value(s) for "${propName}"`, text);
+
+		if (extractedLines.length === 0) return;
+		
+		const finalClipboardText = extractedLines.join('\n');
+		
+		await vscode.env.clipboard.writeText(finalClipboardText);
+		notifyClipboard(`Copied ${extractedLines.length} value(s) for "${propName}"`, finalClipboardText);
 		restoreCursor(editor, original);
 		return;
 	}
@@ -892,28 +889,65 @@ async function runPropertyCommand(action) {
 	}
 
 	// ========================================================
-	// ACTION: PASTE NAME(S) / DELETE NAME(S)
+	// ACTION: MULTI-CURSOR LAYOUT-SAFE CLIPBOARD PASTING/MERGING
 	// ========================================================
-	if (action === 'pastePropertyName' || action === 'pastePropertyNameAndSelect' || action === 'deletePropertyName') {
+	if (action === 'pastePropertyValue' || action === 'pastePropertyValueAndSelect' || action === 'deletePropertyValue') {
 		const sels = [];
+		const indentUnit = getIndentUnit(editor);
+
 		await editor.edit((b) => {
 			for (const o of rawObjectNodes) {
 				const p = findPropertyByKey(o, propName);
-				if (!p) continue;
-				if (action === 'deletePropertyName') {
-					b.replace(rangeFromOffsets(editor.document, p.keyRange[0], p.keyRange[1]), '');
-					sels.push(new vscode.Selection(offsetToPosition(editor.document, p.keyRange[0]), offsetToPosition(editor.document, p.keyRange[0])));
-				} else {
-					const rep = asJsonPropertyName(clipboard);
-					b.replace(rangeFromOffsets(editor.document, p.keyRange[0], p.keyRange[1]), rep);
-					if (action === 'pastePropertyNameAndSelect') {
-						sels.push(new vscode.Selection(offsetToPosition(editor.document, p.valueRange[0]), offsetToPosition(editor.document, p.valueRange[1])));
+				if (p) {
+					const isString = typeof p.rawValue === 'string';
+
+					if (action === 'deletePropertyValue') {
+						const rep = isString ? '""' : '';
+						b.replace(rangeFromOffsets(editor.document, p.valueRange, p.valueRange), rep);
+						
+						// Move cursor offset +1 to place it inside the quotes ("|")
+						const cursorOffset = isString ? p.valueRange + 1 : p.valueRange;
+						const targetPos = offsetToPosition(editor.document, cursorOffset);
+						sels.push(new vscode.Selection(targetPos, targetPos));
+					} else {
+						// Execute pasting with layout formatting calculations
+						const baseIndent = getLineIndent(editor.document, p.valueRange);
+						let replacementText = clipboard;
+
+						try {
+							const parsedValue = JSON.parse(clipboard);
+							if (parsedValue && typeof parsedValue === 'object') {
+								replacementText = formatWithBaseIndent(baseIndent, indentUnit, parsedValue);
+							}
+						} catch (e) {
+							if (clipboard.includes('\n')) {
+								replacementText = clipboard.split('\n').map((line, idx) => idx === 0 ? line : baseIndent + line).join('\n');
+							}
+						}
+
+						b.replace(rangeFromOffsets(editor.document, p.valueRange, p.valueRange), replacementText);
+						
+						if (action === 'pastePropertyValueAndSelect') {
+							sels.push(new vscode.Selection(
+								offsetToPosition(editor.document, p.valueRange), 
+								offsetToPosition(editor.document, p.valueRange + replacementText.length)
+							));
+						}
 					}
+				} else if (action === 'pastePropertyValue' || action === 'pastePropertyValueAndSelect') {
+					const ins = o.offset + o.length - 1;
+					const hasProps = (o.children || []).length > 0;
+					const prefix = hasProps ? ', ' : '';
+					const raw = JSON.stringify(clipboard);
+					const txt = `${prefix}${buildPropertyText(propName, raw)}`;
+					b.insert(offsetToPosition(editor.document, ins), txt);
 				}
 			}
 		});
-		if (action === 'pastePropertyName') restoreCursor(editor, original);
+		
+		if (action === 'pastePropertyValue') restoreCursor(editor, original);
 		else if (sels.length) editor.selections = sels;
+		
 		vscode.window.showInformationMessage(`CherryPucker: Completed -> ${action}`);
 		return;
 	}
