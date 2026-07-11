@@ -272,10 +272,16 @@ function parseTreeWithNodeAtCursor(editor) {
 
 function findObjectAtCursor(editor) {
 	const parsed = parseTreeWithNodeAtCursor(editor);
-	if (!parsed) return null;
+	if (!parsed || !parsed.node) return null; // FIX: Ensure node exists before processing
+	
 	let node = parsed.node;
-	while (node && node.type !== 'object') node = node.parent;
-	if (!node) return null;
+	
+	// FIX: Explicitly guarantee node is valid during every step of the tree ascent
+	while (node && typeof node === 'object' && node.type !== 'object') {
+		node = node.parent;
+	}
+	
+	if (!node || node.type !== 'object') return null;
 	return { ...parsed, objectNode: node, objectValue: jsonc.getNodeValue(node) };
 }
 
@@ -302,7 +308,8 @@ function getLineIndent(document, offset) {
 function getObjectProperties(objectNode) {
 	if (!objectNode || !Array.isArray(objectNode.children)) return [];
 	return objectNode.children
-		.filter((n) => n.type === 'property' && n.children && n.children.length >= 2)
+		// FIX: Added 'n &&' to skip empty structural nodes caused by trailing commas
+		.filter((n) => n && n.type === 'property' && n.children && n.children.length >= 2)
 		.map((propNode) => {
 			const keyNode = propNode.children[0];
 			const valueNode = propNode.children[1];
@@ -338,6 +345,11 @@ function parseClipboardForValue(clipboard, targetWasString) {
 }
 
 function nodeIntersectsSelection(node, selStart, selEnd) {
+	// FIX: Immediately return false if the node is empty, unparsed, or undefined
+	if (!node || typeof node !== 'object' || typeof node.offset !== 'number') {
+		return false; 
+	}
+	
 	const nStart = node.offset;
 	const nEnd = node.offset + node.length;
 	return nEnd >= selStart && nStart <= selEnd;
@@ -350,7 +362,9 @@ function selectedArrayObjectNodes(editor, root) {
 	if (!sels.length) return out;
 	const ranges = sels.map((s) => [editor.document.offsetAt(s.start), editor.document.offsetAt(s.end)]);
 	const walk = (node) => {
+		// FIX: Immediately eject if the node itself is missing/undefined
 		if (!node) return;
+		
 		if (node.type === 'object' && node.parent && node.parent.type === 'array') {
 			for (const [a, b] of ranges) {
 				if (nodeIntersectsSelection(node, a, b)) {
@@ -364,6 +378,7 @@ function selectedArrayObjectNodes(editor, root) {
 	walk(root);
 	return out;
 }
+
 
 function uniqueByOffset(nodes) {
 	const seen = new Set();
@@ -639,10 +654,16 @@ async function runPropertyCommand(action) {
 
 function findArrayAtCursor(editor) {
 	const parsed = parseTreeWithNodeAtCursor(editor);
-	if (!parsed) return null;
+	if (!parsed || !parsed.node) return null; // FIX: Safeguard initial parsing bounds
+	
 	let node = parsed.node;
-	while (node && node.type !== 'array') node = node.parent;
-	if (!node) return null;
+	
+	// FIX: Protect the loop from climbing past the file root into undefined space
+	while (node && typeof node === 'object' && node.type !== 'array') {
+		node = node.parent;
+	}
+	
+	if (!node || node.type !== 'array') return null;
 	return { ...parsed, arrayNode: node, arrayValue: jsonc.getNodeValue(node) };
 }
 
@@ -652,6 +673,8 @@ function getSelectedArrayIndices(editor, arrayNode) {
 	const ranges = sels.map((s) => [editor.document.offsetAt(s.start), editor.document.offsetAt(s.end)]);
 	const out = [];
 	(arrayNode.children || []).forEach((child, idx) => {
+		// FIX: Added 'child &&' to ensure the array node token is valid before intersection evaluation
+		if (!child) return;
 		for (const [a, b] of ranges) {
 			if (nodeIntersectsSelection(child, a, b)) { out.push(idx); break; }
 		}
@@ -803,8 +826,8 @@ async function runObjectCommand(action) {
 		const finalNode = sortedNodes[sortedNodes.length - 1];
 		const finalInsertionIndex = finalNode.offset + finalNode.length;
 		
-		// Check if we are inside a JSON array to map out trailing commas correctly
-		const insideArray = finalNode.parent && finalNode.parent.type === 'array';
+		// FIX: Added optional chaining (?.) to prevent crashing if parent is undefined
+		const insideArray = finalNode.parent?.type === 'array';
 		
 		const blocksText = sortedNodes.map(n => documentText.slice(n.offset, n.offset + n.length)).join(insideArray ? ',\n' : '\n');
 		const finalTextToInsert = insideArray ? `,\n${blocksText}` : `\n${blocksText}`;
