@@ -1,3 +1,7 @@
+---
+title: README
+---
+
 # CherryPucker
 
 CherryPucker is a VS Code extension for copying JSON data quickly using configurable text templates.

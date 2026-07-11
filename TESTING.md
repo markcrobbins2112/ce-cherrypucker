@@ -1,4 +1,8 @@
-# Testing
+---
+title: TESTING
+---
+
+# TESTING
 
 You can use this interactive test sheet directly with VS Code / Cursor to verify that all systems in **CherryPucker** are fully functional. Put your cursor on these checkbox lines, and mark them done!
 
