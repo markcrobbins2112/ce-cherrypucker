@@ -40,12 +40,17 @@ async function runPipeline() {
     console.log('Waiting for file handles to clear...');
     await delay(250);
 
-    // 3. Step 2: Increment the last digit of the version string
+    // 3. Step 2: Increment the last digit of the version string cleanly
     console.log('\n--- 2/4: Incrementing Build Version ---');
     let versionParts = currentVersion.split('.');
     if (versionParts.length === 3) {
-        versionParts[2] = String(parseInt(versionParts[2], 10) + 1);
+        // FIXED: Explicitly parse the patch number at index 2 using base-10 radix
+        let patchNumber = parseInt(versionParts[2], 10);
+        patchNumber += 1; // Increment safely
+        
+        versionParts[2] = String(patchNumber);
         packageData.version = versionParts.join('.');
+        
         fs.writeFileSync(packageJsonPath, JSON.stringify(packageData, null, 2) + '\n', 'utf8');
         console.log(`Version successfully bumped: ${currentVersion} -> ${packageData.version}`);
     } else {
@@ -63,10 +68,8 @@ async function runPipeline() {
         }
     });
 
-    //const packageSuccess = runCommand('vsce package --allow-unused-files-pattern');
-    //const packageSuccess = runCommand('vsce package --no-dependencies');
+    // FIXED: Running clean "vsce package" allows automatic node_modules/jsonc-parser embedding
     const packageSuccess = runCommand('vsce package');
-
     if (!packageSuccess) {
         console.error('Packaging failed. Aborting pipeline installer.');
         process.exit(1);

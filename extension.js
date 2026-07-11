@@ -111,7 +111,7 @@ const COMMAND_TITLE_BY_ID = {
 function getUserKeybindingsPath() {
 	// Detect if the active editor app is Cursor or VS Code
 	const isCursor = vscode.env.appName && vscode.env.appName.toLowerCase().includes('cursor');
-	
+
 	// Get base platform system directories
 	const home = process.env.HOME || process.env.USERPROFILE || '';
 	const appData = process.env.APPDATA;
@@ -131,19 +131,19 @@ function getUserKeybindingsPath() {
 
 function readUserKeybindings() {
 	const kbPath = getUserKeybindingsPath();
-	
+
 	// If the file doesn't exist yet, return empty data placeholders so we can safely generate it
 	if (!fs.existsSync(kbPath)) {
 		return { kbPath, bindings: [], raw: '' };
 	}
-	
+
 	const raw = fs.readFileSync(kbPath, 'utf8');
 	const parsed = jsonc.parse(raw);
-	
+
 	if (parsed !== null && !Array.isArray(parsed)) {
 		throw new Error('keybindings.json must contain a JSON array.');
 	}
-	
+
 	return { kbPath, bindings: parsed || [], raw };
 }
 
@@ -176,7 +176,7 @@ function writeUserKeybindings(kbPath, bindings, raw) {
 		fs.writeFileSync(kbPath, `${JSON.stringify(bindings, null, indent)}\n`, 'utf8');
 		return;
 	}
-	
+
 	// If the file already exists, we do NOT use this function to overwrite it anymore.
 	// Instead, we use jsonc.applyEdits inside the execution run block below.
 }
@@ -195,7 +195,7 @@ async function runApplySuggestedBindings() {
 		for (const suggested of SUGGESTED_KEYBINDINGS) {
 			const exactDup = existing.find(
 				(b) => String(b.key || '').toLowerCase() === suggested.key.toLowerCase() &&
-				       String(b.command || '') === suggested.command
+					String(b.command || '') === suggested.command
 			);
 			if (exactDup) continue;
 
@@ -215,7 +215,7 @@ async function runApplySuggestedBindings() {
 
 			// Safely stitch the new keybinding item into the raw text string, preserving comments!
 			updatedRawText = jsonc.applyEdits(updatedRawText, edits);
-			
+
 			existing.push(suggested);
 			applied.push(suggested);
 		}
@@ -266,21 +266,23 @@ function parseTreeWithNodeAtCursor(editor) {
 	const root = jsonc.parseTree(text);
 	if (!root) return null;
 	const offset = document.offsetAt(editor.selection.active);
-	let node = jsonc.findNodeAtOffset(root, offset, true);
+
+	// FIX: Changed true to false so cursor offset ignores whitespace/comments
+	let node = jsonc.findNodeAtOffset(root, offset, false);
 	return { document, text, root, offset, node };
 }
 
 function findObjectAtCursor(editor) {
 	const parsed = parseTreeWithNodeAtCursor(editor);
 	if (!parsed || !parsed.node) return null; // FIX: Ensure node exists before processing
-	
+
 	let node = parsed.node;
-	
+
 	// FIX: Explicitly guarantee node is valid during every step of the tree ascent
 	while (node && typeof node === 'object' && node.type !== 'object') {
 		node = node.parent;
 	}
-	
+
 	if (!node || node.type !== 'object') return null;
 	return { ...parsed, objectNode: node, objectValue: jsonc.getNodeValue(node) };
 }
@@ -308,7 +310,7 @@ function getLineIndent(document, offset) {
 function getObjectProperties(objectNode) {
 	if (!objectNode || !Array.isArray(objectNode.children)) return [];
 	return objectNode.children
-		// FIX: Added 'n &&' to skip empty structural nodes caused by trailing commas
+		// FIX: Added 'n &&' to protect against undefined trailing comma placeholder nodes
 		.filter((n) => n && n.type === 'property' && n.children && n.children.length >= 2)
 		.map((propNode) => {
 			const keyNode = propNode.children[0];
@@ -347,9 +349,9 @@ function parseClipboardForValue(clipboard, targetWasString) {
 function nodeIntersectsSelection(node, selStart, selEnd) {
 	// FIX: Immediately return false if the node is empty, unparsed, or undefined
 	if (!node || typeof node !== 'object' || typeof node.offset !== 'number') {
-		return false; 
+		return false;
 	}
-	
+
 	const nStart = node.offset;
 	const nEnd = node.offset + node.length;
 	return nEnd >= selStart && nStart <= selEnd;
@@ -362,10 +364,10 @@ function selectedArrayObjectNodes(editor, root) {
 	if (!sels.length) return out;
 	const ranges = sels.map((s) => [editor.document.offsetAt(s.start), editor.document.offsetAt(s.end)]);
 	const walk = (node) => {
-		// FIX: Immediately eject if the node itself is missing/undefined
 		if (!node) return;
-		
-		if (node.type === 'object' && node.parent && node.parent.type === 'array') {
+
+		// FIX: Use optional chaining (?.) to prevent trying to read .type off an undefined or incomplete parent link
+		if (node.type === 'object' && node.parent?.type === 'array') {
 			for (const [a, b] of ranges) {
 				if (nodeIntersectsSelection(node, a, b)) {
 					out.push(node);
@@ -381,9 +383,13 @@ function selectedArrayObjectNodes(editor, root) {
 
 
 function uniqueByOffset(nodes) {
+	if (!Array.isArray(nodes)) return []; // Guard against bad array inputs
 	const seen = new Set();
 	const out = [];
 	for (const n of nodes) {
+		// FIX: Skip empty or undefined nodes entirely before checking offsets
+		if (!n || typeof n.offset !== 'number') continue;
+
 		const k = `${n.offset}:${n.length}`;
 		if (!seen.has(k)) { seen.add(k); out.push(n); }
 	}
@@ -391,10 +397,88 @@ function uniqueByOffset(nodes) {
 }
 
 function getTargetObjectNodes(editor, parsedAtCursor) {
-	const selected = uniqueByOffset(selectedArrayObjectNodes(editor, parsedAtCursor.root));
-	if (selected.length) return selected;
-	return [parsedAtCursor.objectNode];
+	if (!editor || !editor.selections || !parsedAtCursor || !parsedAtCursor.root) {
+		return [];
+	}
+
+	const collectedTargets = [];
+
+	for (const selection of editor.selections) {
+		const offset = editor.document.offsetAt(selection.active);
+
+		// Use includeTrivia = true to capture exact positions on whitespaces, colons, and commas
+		let node = jsonc.findNodeAtOffset(parsedAtCursor.root, offset, true);
+		if (!node) continue;
+
+		// 1. Array Level Traversal
+		if (node.type === 'array') {
+			if (offset === node.offset) {
+				// Directly on the opening '[' bracket
+				collectedTargets.push({ type: 'FullArray', node: node });
+			} else {
+				// Inside the array body text space
+				collectedTargets.push({ type: 'ArrayContents', node: node });
+			}
+			continue;
+		}
+
+		// 2. Property & Colon Boundary Logic
+		if (node.type === 'property') {
+			const keyNode = node.children[0];
+			const valueNode = node.children[1];
+
+			// Find the colon's physical character offset position
+			const colonOffset = parsedAtCursor.text.indexOf(':', keyNode.offset + keyNode.length);
+
+			if (offset > colonOffset) {
+				// Cursor is AFTER the colon -> Grab the assigned value block directly
+				if (valueNode) {
+					if (valueNode.type === 'array') {
+						collectedTargets.push({ type: 'FullArray', node: valueNode });
+					} else if (valueNode.type === 'object') {
+						collectedTargets.push({ type: 'NakedObject', node: valueNode });
+					} else {
+						collectedTargets.push({ type: 'PrimitiveValue', node: valueNode });
+					}
+				}
+			} else {
+				// Cursor is BEFORE or ON the colon -> Grab the container parent of this property
+				let parentContainer = node.parent;
+				if (parentContainer && parentContainer.type === 'object') {
+					collectedTargets.push({ type: 'NakedObject', node: parentContainer });
+				}
+			}
+			continue;
+		}
+
+		// 3. Fallback: Standard container tree climber
+		let climbNode = node;
+		while (climbNode && climbNode.type !== 'object' && climbNode.type !== 'array') {
+			climbNode = climbNode.parent;
+		}
+
+		if (climbNode) {
+			if (climbNode.type === 'object') {
+				collectedTargets.push({ type: 'NakedObject', node: climbNode });
+			} else if (climbNode.type === 'array') {
+				// If cursor is on a gap or trailing comma inside the array, treat it as array contents
+				collectedTargets.push({ type: 'ArrayContents', node: climbNode });
+			}
+		}
+	}
+
+	// Remove structural duplicates
+	const seen = new Set();
+	return collectedTargets.filter(target => {
+		const key = `${target.node.offset}:${target.node.length}:${target.type}`;
+		if (!seen.has(key)) {
+			seen.add(key);
+			return true;
+		}
+		return false;
+	});
 }
+
 
 async function replaceRange(editor, start, end, replacement) {
 	return editor.edit((b) => b.replace(rangeFromOffsets(editor.document, start, end), replacement));
@@ -432,15 +516,102 @@ function formatWithBaseIndent(baseIndent, indentUnit, value) {
 	return json.split('\n').map((line, i) => (i === 0 ? line : `${baseIndent}${line}`)).join('\n');
 }
 
-async function runTemplateCommand(index) {
+async function runTemplateCommand() {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return vscode.window.showWarningMessage('CherryPucker: No active editor.');
-	const found = findObjectAtCursor(editor);
-	if (!found) return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object.');
-	const template = vscode.workspace.getConfiguration('cherryPucker').get(`template${index}`, '');
-	const result = substituteTemplate(template, found.objectValue);
-	await vscode.env.clipboard.writeText(result);
-	notifyClipboard(`Copied Template ${index}`, result);
+	
+	const originalSelections = editor.selections;
+
+	// 1. Gather active context using your standard AST tree parser helper
+	const parsed = parseTreeWithNodeAtCursor(editor);
+	if (!parsed || !parsed.root) {
+		return vscode.window.showWarningMessage('CherryPucker: Failed to parse file structure.');
+	}
+
+	// 2. SELECTION-AWARE NODE COLLECTOR (Gathers all highlighted or multi-cursor object blocks)
+	let targetObjects = [];
+	const hasActiveSelection = editor.selections.some(s => !s.isEmpty);
+
+	if (hasActiveSelection) {
+		const selectedNodes = uniqueByOffset(selectedArrayObjectNodes(editor, parsed.root));
+		if (selectedNodes && selectedNodes.length > 0) {
+			targetObjects = selectedNodes.map(node => ({ type: 'NakedObject', node: node }));
+		}
+	} else {
+		targetObjects = getTargetObjectNodes(editor, parsed);
+	}
+
+	if (!targetObjects || targetObjects.length === 0) {
+		return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object or select object data.');
+	}
+
+	// Deduplicate by structural character offsets to strictly ban any overlapping ranges
+	const finalUniqueTargets = [];
+	const uniqueRangeRegistry = new Set();
+	for (const target of targetObjects) {
+		if (!target || !target.node || typeof target.node.offset !== 'number') continue;
+		const rangeKey = `${target.node.offset}:${target.node.length}`;
+		if (!uniqueRangeRegistry.has(rangeKey)) {
+			uniqueRangeRegistry.add(rangeKey);
+			finalUniqueTargets.push(target);
+		}
+	}
+
+	// Sort targets top-to-bottom so they parse in correct natural visual sequence
+	const sortedTargets = [...finalUniqueTargets].sort((a, b) => a.node.offset - b.node.offset);
+
+	// 3. ZERO-PROMPT BLUEPRINT CAPTURE: Instantly grab your template blueprint pattern out of the active clipboard
+	const templateInput = await vscode.env.clipboard.readText();
+	if (!templateInput || !templateInput.trim()) {
+		return vscode.window.showWarningMessage('CherryPucker: Clipboard is empty. Copy a template pattern first (e.g. {"id": {{id}} }).');
+	}
+
+	// 4. GENERATION PIPELINE: Loop through targets and map values into your template
+	const generatedBlocks = [];
+	const indentUnit = getIndentUnit(editor);
+	const baseIndent = getLineIndent(editor.document, sortedTargets[0].node.offset);
+
+	for (const target of sortedTargets) {
+		const node = target.node;
+		const objValue = jsonc.getNodeValue(node);
+		if (!objValue || typeof objValue !== 'object' || Array.isArray(objValue)) continue;
+
+		// Substitute placeholders matching properties inside the current object instance
+		let substitutedText = templateInput.replace(/\{\{([^}]+)\}\}/g, (match, keyName) => {
+			const trimmedKey = keyName.trim();
+			if (objValue.hasOwnProperty(trimmedKey)) {
+				const val = objValue[trimmedKey];
+				return typeof val === 'object' ? JSON.stringify(val) : String(val);
+			}
+			return match; // Keep placeholder intact if missing in this particular object
+		});
+
+		// Parse and re-indent according to your workspace formatting rules
+		try {
+			const parsedSnippet = JSON.parse(substitutedText);
+			const formattedSnippet = formatWithBaseIndent(baseIndent, indentUnit, parsedSnippet);
+			generatedBlocks.push(formattedSnippet);
+		} catch (e) {
+			// Fallback: If it's a loose un-parsed fragment string, push raw text with base indent
+			generatedBlocks.push(baseIndent + substitutedText.trim());
+		}
+	}
+
+	if (generatedBlocks.length === 0) return;
+
+	// Determine if the lowest object lives inside a parent JSON array block
+	const lowestNode = sortedTargets[sortedTargets.length - 1].node;
+	const insideArray = lowestNode.parent?.type === 'array';
+
+	// Join all newly stamped objects with structural newlines (and commas if inside an array context) [INDEX]
+	const combinedTemplateResult = generatedBlocks.join(insideArray ? ',\n' : '\n');
+
+	// 5. ATOMIC OPERATION EXECUTOR: Overwrite the clipboard with your new concatenated text block [INDEX]
+	await vscode.env.clipboard.writeText(combinedTemplateResult);
+	notifyClipboard(`Generated ${generatedBlocks.length} Template Copies`, combinedTemplateResult);
+	
+	// Restore selections cleanly
+	editor.selections = originalSelections;
 }
 
 function buildPropertyQuickPickItems(obj) {
@@ -484,72 +655,214 @@ async function pickPropertyFromObjects(editor, objectNodes, placeHolder) {
 async function runJumpToPropertyNameCommand() {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return vscode.window.showWarningMessage('CherryPucker: No active editor.');
-	const original = editor.selection;
-	const found = findObjectAtCursor(editor);
-	if (!found || typeof found.objectValue !== 'object' || Array.isArray(found.objectValue)) return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object.');
-	const props = getObjectProperties(found.objectNode);
-	if (!props.length) return vscode.window.showWarningMessage('CherryPucker: Object has no properties.');
+
+	const originalSelections = editor.selections;
+
+	// 1. Gather active context using your standard AST tree parser helper
+	const parsedAtCursor = parseTreeWithNodeAtCursor(editor);
+	if (!parsedAtCursor || !parsedAtCursor.root) {
+		return vscode.window.showWarningMessage('CherryPucker: Failed to parse file structure.');
+	}
+
+	// ==========================================
+	// CRITICAL FIX: EXPLICIT JUMP TARGET COLLECTOR
+	// ==========================================
+	let targetObjects = [];
+	const hasActiveSelection = editor.selections.some(s => !s.isEmpty);
+
+	if (hasActiveSelection) {
+		// If text is highlighted, pull ALL individual object nodes from the selection block
+		const selectedNodes = uniqueByOffset(selectedArrayObjectNodes(editor, parsedAtCursor.root));
+		if (selectedNodes && selectedNodes.length > 0) {
+			targetObjects = selectedNodes.map(node => ({ type: 'NakedObject', node: node }));
+		}
+	} else {
+		// Fall back to your multi-cursor line context tracker if no drag selection is present
+		targetObjects = getTargetObjectNodes(editor, parsedAtCursor);
+	}
+
+	if (!targetObjects || targetObjects.length === 0) {
+		return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object or select object data.');
+	}
+
+	// 2. Aggregate unique properties across ALL targeted objects
+	const combinedPropsMap = new Map();
+	for (const target of targetObjects) {
+		const objectNode = target.node;
+		const objectProps = getObjectProperties(objectNode);
+
+		for (const prop of objectProps) {
+			if (!combinedPropsMap.has(prop.key)) {
+				combinedPropsMap.set(prop.key, prop);
+			}
+		}
+	}
+
+	const propsList = Array.from(combinedPropsMap.values());
+	if (!propsList.length) {
+		return vscode.window.showWarningMessage('CherryPucker: Selected object(s) have no properties.');
+	}
+
+	// 3. Create and display the interactive QuickPick dropdown menu
 	const qp = vscode.window.createQuickPick();
-	qp.items = propertyQuickPickItems(props);
-	qp.placeholder = 'Select a property name to jump to';
+	qp.items = propertyQuickPickItems(propsList);
+	qp.placeholder = `Select a property name to jump to across ${targetObjects.length} object(s)`;
+
 	let accepted = false;
+
+	// Real-time Preview: Scrolls your screen view as you arrow through menu options
 	qp.onDidChangeActive((items) => {
-		if (!items.length) return;
-		const p = items[0].prop;
-		editor.revealRange(rangeFromOffsets(editor.document, p.nameInsideQuoteRange[0], p.nameInsideQuoteRange[1]), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+		if (!items || items.length === 0) return;
+		const targetPropName = items[0].label; // Fixed array extraction
+
+		for (const target of targetObjects) {
+			const matchingProp = getObjectProperties(target.node).find(p => p.key === targetPropName);
+			if (matchingProp) {
+				editor.revealRange(
+					rangeFromOffsets(editor.document, matchingProp.nameInsideQuoteRange[0], matchingProp.nameInsideQuoteRange[1]),
+					vscode.TextEditorRevealType.InCenterIfOutsideViewport
+				);
+				break;
+			}
+		}
 	});
+
+	// Execution Accept: Fires when you hit Enter on a property option
 	qp.onDidAccept(() => {
-		const sel = qp.selectedItems[0];
-		if (!sel) return;
-		const p = sel.prop;
-		editor.selection = new vscode.Selection(offsetToPosition(editor.document, p.nameInsideQuoteRange[0]), offsetToPosition(editor.document, p.nameInsideQuoteRange[1]));
-		editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+		const selectedItems = qp.selectedItems;
+		if (!selectedItems || selectedItems.length === 0) return;
+
+		// FIXED: Unpack single item safely out of QuickPick selection array context
+		const targetPropName = selectedItems[0].label;
+		const multiCursorSelections = [];
+
+		// Create a separate cursor selection block for every single object that contains this property
+		for (const target of targetObjects) {
+			const matchingProp = getObjectProperties(target.node).find(p => p.key === targetPropName);
+			if (matchingProp) {
+				const startPos = offsetToPosition(editor.document, matchingProp.nameInsideQuoteRange[0]);
+				const endPos = offsetToPosition(editor.document, matchingProp.nameInsideQuoteRange[1]);
+
+				// Generate a standard text cursor selection spanning the key name characters
+				multiCursorSelections.push(new vscode.Selection(startPos, endPos));
+			}
+		}
+
 		accepted = true;
 		qp.hide();
+
+		if (multiCursorSelections.length > 0) {
+			// Clear out the active drag-selection first so the editor drops its selection priority
+			editor.selections = [];
+
+			// Force layout engines to drop cursors on an independent thread execution tick
+			setTimeout(() => {
+				editor.selections = multiCursorSelections;
+				if (editor.selections.length > 0) {
+					editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+				}
+			}, 20);
+		}
 	});
+
 	qp.onDidHide(() => {
 		qp.dispose();
-		if (!accepted) restoreCursor(editor, original);
+		if (!accepted) {
+			editor.selections = originalSelections;
+		}
 	});
+
 	qp.show();
 }
 
 async function runPropertyCommand(action) {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return vscode.window.showWarningMessage('CherryPucker: No active editor.');
-	const parsed = findObjectAtCursor(editor);
-	if (!parsed || typeof parsed.objectValue !== 'object' || Array.isArray(parsed.objectValue)) return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object.');
+
 	const original = editor.selection;
-	const targetObjects = getTargetObjectNodes(editor, parsed);
-	const propName = await pickPropertyFromObjects(editor, targetObjects, 'Select a property');
+
+	// 1. Gather active context using your standard AST tree parser helper
+	const parsed = parseTreeWithNodeAtCursor(editor);
+	if (!parsed || !parsed.root) {
+		return vscode.window.showWarningMessage('CherryPucker: Failed to parse file structure.');
+	}
+
+	// 2. SELECTION-AWARE TARGET OBJECTS COLLECTOR (Matches the Jump Tool architecture)
+	let targetObjects = [];
+	const hasActiveSelection = editor.selections.some(s => !s.isEmpty);
+
+	if (hasActiveSelection) {
+		// If text is highlighted, pull ALL individual object nodes from the selection block
+		const selectedNodes = uniqueByOffset(selectedArrayObjectNodes(editor, parsed.root));
+		if (selectedNodes && selectedNodes.length > 0) {
+			// Map to match the expected node wrapper format
+			targetObjects = selectedNodes.map(node => ({ type: 'NakedObject', node: node }));
+		}
+	} else {
+		// Fall back to your multi-cursor line context tracker if no drag selection is present
+		targetObjects = getTargetObjectNodes(editor, parsed);
+	}
+
+	if (!targetObjects || targetObjects.length === 0) {
+		return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object or select object data.');
+	}
+
+	// Convert targeted wrappers safely back down into plain AST node elements for your existing loops
+	const rawObjectNodes = targetObjects.map(t => t.node);
+
+	// 3. Prompt user to select a target property from the active objects group
+	const propName = await pickPropertyFromObjects(editor, rawObjectNodes, `Select a property to execute: ${action}`);
 	if (!propName) return;
+
 	const clipboard = await vscode.env.clipboard.readText();
 
+	// ==========================================
+	// ACTION: COPY PROPERTY VALUE(S)
+	// ==========================================
 	if (action === 'copyPropertyValue') {
 		const lines = [];
-		for (const o of targetObjects) {
+		for (const o of rawObjectNodes) {
 			const p = findPropertyByKey(o, propName);
 			if (p) lines.push(formatValue(p.rawValue));
 		}
 		const text = lines.join('\n');
 		await vscode.env.clipboard.writeText(text);
-		notifyClipboard(`Copied value for "${propName}"`, text);
+		notifyClipboard(`Copied value(s) for "${propName}"`, text);
 		restoreCursor(editor, original);
 		return;
 	}
 
+	// ========================================================
+	// ACTION: PASTE VALUE(S) / DELETE VALUE(S)
+	// ========================================================
 	if (action === 'pastePropertyValue' || action === 'pastePropertyValueAndSelect' || action === 'deletePropertyValue') {
 		const sels = [];
+
 		await editor.edit((b) => {
-			for (const o of targetObjects) {
+			for (const o of rawObjectNodes) {
 				const p = findPropertyByKey(o, propName);
 				if (p) {
 					let rep = '';
-					if (action === 'pastePropertyValue' || action === 'pastePropertyValueAndSelect') rep = parseClipboardForValue(clipboard, typeof p.rawValue === 'string');
-					if (action === 'deletePropertyValue') rep = typeof p.rawValue === 'string' ? '""' : '';
+					const isString = typeof p.rawValue === 'string';
+
+					if (action === 'pastePropertyValue' || action === 'pastePropertyValueAndSelect') {
+						rep = parseClipboardForValue(clipboard, isString);
+					}
+					if (action === 'deletePropertyValue') {
+						rep = isString ? '""' : '';
+					}
+
 					b.replace(rangeFromOffsets(editor.document, p.valueRange[0], p.valueRange[1]), rep);
-					if (action === 'pastePropertyValueAndSelect') sels.push(new vscode.Selection(offsetToPosition(editor.document, p.valueRange[0]), offsetToPosition(editor.document, p.valueRange[0] + rep.length)));
-					if (action === 'deletePropertyValue') sels.push(new vscode.Selection(offsetToPosition(editor.document, p.valueRange[0]), offsetToPosition(editor.document, p.valueRange[0])));
+
+					if (action === 'pastePropertyValueAndSelect') {
+						sels.push(new vscode.Selection(offsetToPosition(editor.document, p.valueRange[0]), offsetToPosition(editor.document, p.valueRange[0] + rep.length)));
+					}
+					if (action === 'deletePropertyValue') {
+						// FIXED: If we deleted a string value into "", move cursor offset +1 to place it inside the quotes ("|")
+						const cursorOffset = isString ? p.valueRange[0] + 1 : p.valueRange[0];
+						const targetPos = offsetToPosition(editor.document, cursorOffset);
+						sels.push(new vscode.Selection(targetPos, targetPos));
+					}
 				} else if (action === 'pastePropertyValue' || action === 'pastePropertyValueAndSelect') {
 					const ins = o.offset + o.length - 1;
 					const hasProps = (o.children || []).length > 0;
@@ -560,12 +873,17 @@ async function runPropertyCommand(action) {
 				}
 			}
 		});
+
 		if (action === 'pastePropertyValue') restoreCursor(editor, original);
 		else if (sels.length) editor.selections = sels;
-		vscode.window.showInformationMessage(`CherryPucker: ${action}`);
+
+		vscode.window.showInformationMessage(`CherryPucker: Completed -> ${action}`);
 		return;
 	}
 
+	// ==========================================
+	// ACTION: COPY PROPERTY NAME
+	// ==========================================
 	if (action === 'copyPropertyName') {
 		await vscode.env.clipboard.writeText(propName);
 		notifyClipboard(`Copied property name "${propName}"`, propName);
@@ -573,10 +891,13 @@ async function runPropertyCommand(action) {
 		return;
 	}
 
+	// ========================================================
+	// ACTION: PASTE NAME(S) / DELETE NAME(S)
+	// ========================================================
 	if (action === 'pastePropertyName' || action === 'pastePropertyNameAndSelect' || action === 'deletePropertyName') {
 		const sels = [];
 		await editor.edit((b) => {
-			for (const o of targetObjects) {
+			for (const o of rawObjectNodes) {
 				const p = findPropertyByKey(o, propName);
 				if (!p) continue;
 				if (action === 'deletePropertyName') {
@@ -585,19 +906,24 @@ async function runPropertyCommand(action) {
 				} else {
 					const rep = asJsonPropertyName(clipboard);
 					b.replace(rangeFromOffsets(editor.document, p.keyRange[0], p.keyRange[1]), rep);
-					if (action === 'pastePropertyNameAndSelect') sels.push(new vscode.Selection(offsetToPosition(editor.document, p.valueRange[0]), offsetToPosition(editor.document, p.valueRange[1])));
+					if (action === 'pastePropertyNameAndSelect') {
+						sels.push(new vscode.Selection(offsetToPosition(editor.document, p.valueRange[0]), offsetToPosition(editor.document, p.valueRange[1])));
+					}
 				}
 			}
 		});
 		if (action === 'pastePropertyName') restoreCursor(editor, original);
 		else if (sels.length) editor.selections = sels;
-		vscode.window.showInformationMessage(`CherryPucker: ${action}`);
+		vscode.window.showInformationMessage(`CherryPucker: Completed -> ${action}`);
 		return;
 	}
 
+	// ==========================================
+	// ACTION: COPY WHOLE PROPERTY SNIPPET(S)
+	// ==========================================
 	if (action === 'copyProperty') {
 		const lines = [];
-		for (const o of targetObjects) {
+		for (const o of rawObjectNodes) {
 			const p = findPropertyByKey(o, propName);
 			if (!p) continue;
 			const snap = propertySnippetWithComma(parsed.text, p.propNode);
@@ -610,43 +936,164 @@ async function runPropertyCommand(action) {
 		return;
 	}
 
+	// ========================================================
+	// ACTION: DUPLICATE / MOVE / DELETE ENTIRE PROPERTY ROWS
+	// ========================================================
 	if (action === 'dupeProperty' || action === 'movePropertyUp' || action === 'movePropertyDown' || action === 'deleteProperty') {
+		// Master array tracking where multi-cursors should land after text insertion completes
+		const sels = [];
+
 		await editor.edit((b) => {
-			for (const o of targetObjects) {
+			for (const o of rawObjectNodes) {
 				const props = getObjectProperties(o);
 				const idx = props.findIndex((p) => p.key === propName);
 				if (idx < 0) continue;
 				const p = props[idx];
 				const snap = propertySnippetWithComma(parsed.text, p.propNode);
+
+				// ========================================================
+				// FIXED: BULK DELETE PROPERTY LINES (CLEARS INDENTATION TABS)
+				// ========================================================
 				if (action === 'deleteProperty') {
-					b.replace(rangeFromOffsets(editor.document, snap.start, snap.end), '');
+					let deleteStart = snap.start;
+					let deleteEnd = snap.end;
+
+					// 1. BACKWARD LOOK: Consume all leading indentation tabs/spaces on this line
+					let startSearch = deleteStart - 1;
+					while (startSearch >= 0 && (parsed.text[startSearch] === ' ' || parsed.text[startSearch] === '\t')) {
+						deleteStart = startSearch;
+						startSearch -= 1;
+					}
+
+					// 2. FORWARD LOOK: Consume exactly ONE trailing newline sequence right after the comma
+					if (deleteEnd < parsed.text.length && (parsed.text[deleteEnd] === '\r' || parsed.text[deleteEnd] === '\n')) {
+						if (parsed.text[deleteEnd] === '\r' && parsed.text[deleteEnd + 1] === '\n') {
+							deleteEnd += 2; // Windows CRLF (\r\n)
+						} else {
+							deleteEnd += 1; // Linux/macOS LF (\n)
+						}
+					} else {
+						// Fallback: If it's the final property inside the object, swallow the preceding line break
+						if (startSearch >= 0 && (parsed.text[startSearch] === '\n' || parsed.text[startSearch] === '\r')) {
+							if (parsed.text[startSearch] === '\n' && parsed.text[startSearch - 1] === '\r') {
+								deleteStart = startSearch - 1;
+							} else {
+								deleteStart = startSearch;
+							}
+						}
+					}
+
+					b.replace(rangeFromOffsets(editor.document, deleteStart, deleteEnd), '');
 					continue;
 				}
+
 				if (action === 'dupeProperty') {
-					b.insert(offsetToPosition(editor.document, snap.end), snap.text);
+					const baseIndent = getLineIndent(editor.document, p.propNode.offset);
+					let cleanPropSnippet = snap.text.trimEnd();
+					if (!cleanPropSnippet.endsWith(',')) {
+						cleanPropSnippet += ',';
+					}
+
+					const textToInsert = `\n${baseIndent}${cleanPropSnippet}`;
+					b.insert(offsetToPosition(editor.document, snap.end), textToInsert);
+
+					// Shifted offsets +1 right to perfectly capture the inner text bounds ("|name")
+					const newKeyStartOffset = snap.end + 1 + baseIndent.length + 1 + 1;
+					const newKeyEndOffset = newKeyStartOffset + p.key.length;
+
+					sels.push(new vscode.Selection(
+						offsetToPosition(editor.document, newKeyStartOffset),
+						offsetToPosition(editor.document, newKeyEndOffset)
+					));
 					continue;
 				}
-				const swapIdx = action === 'movePropertyUp' ? idx - 1 : idx + 1;
-				if (swapIdx < 0 || swapIdx >= props.length) continue;
-				const p2 = props[swapIdx];
-				const a = propertySnippetWithComma(parsed.text, p.propNode);
-				const c = propertySnippetWithComma(parsed.text, p2.propNode);
-				const left = a.start < c.start ? a : c;
-				const right = a.start < c.start ? c : a;
-				const combined = parsed.text.slice(left.start, right.end);
-				const first = parsed.text.slice(a.start, a.end);
-				const second = parsed.text.slice(c.start, c.end);
-				const swapped = a.start < c.start ? combined.replace(first + second, second + first) : combined.replace(second + first, first + second);
-				b.replace(rangeFromOffsets(editor.document, left.start, right.end), swapped);
+
+				// ========================================================
+				// FIXED: MULTI-LINE & DIRECTION-AWARE COMMA SWAPPING
+				// ========================================================
+				if (action === 'movePropertyUp' || action === 'movePropertyDown') {
+					const isUp = action === 'movePropertyUp';
+					const props = getObjectProperties(o);
+					
+					const idx = props.findIndex((p) => p.key === propName);
+					if (idx < 0) continue;
+
+					const swapIdx = isUp ? idx - 1 : idx + 1;
+					if (swapIdx < 0 || swapIdx >= props.length) continue;
+
+					const currentProp = props[idx];
+					const neighborProp = props[swapIdx];
+
+					// Identify exact line boundaries directly from document positions
+					const currentStartLine = editor.document.positionAt(currentProp.propNode.offset).line;
+					const currentEndLine = editor.document.positionAt(currentProp.propNode.offset + currentProp.propNode.length).line;
+
+					const neighborStartLine = editor.document.positionAt(neighborProp.propNode.offset).line;
+					const neighborEndLine = editor.document.positionAt(neighborProp.propNode.offset + neighborProp.propNode.length).line;
+
+					const currentStartPos = new vscode.Position(currentStartLine, 0);
+					const currentEndText = editor.document.lineAt(currentEndLine).text;
+					const currentEndPos = new vscode.Position(currentEndLine, currentEndText.length);
+
+					const neighborStartPos = new vscode.Position(neighborStartLine, 0);
+					const neighborEndText = editor.document.lineAt(neighborEndLine).text;
+					const neighborEndPos = new vscode.Position(neighborEndLine, neighborEndText.length);
+
+					let currentText = editor.document.getText(new vscode.Range(currentStartPos, currentEndPos));
+					let neighborText = editor.document.getText(new vscode.Range(neighborStartPos, neighborEndPos));
+
+					// ========================================================
+					// COMMA SANITIZATION LIFECYCLE
+					// ========================================================
+					let cleanCurrent = currentText.trimEnd();
+					let cleanNeighbor = neighborText.trimEnd();
+
+					if (isUp) {
+						// 1. Current text moves UP into a middle slot -> Must have a comma
+						if (!cleanCurrent.endsWith(',')) {
+							currentText = currentText.replace(/(\s*)$/, ',$1');
+						}
+
+						// 2. Neighbor text moves DOWN to the bottom -> Check if it lands at the final line
+						// Check if the current item was originally the absolute last item in the object
+						const isCurrentLastItem = (idx === props.length - 1);
+						if (isCurrentLastItem && cleanNeighbor.endsWith(',')) {
+							// Neighbor is now the last item! Strip its trailing comma cleanly
+							neighborText = neighborText.replace(/,(\s*)$/, '$1');
+						}
+					} else {
+						// 1. Neighbor text moves UP into a middle slot -> Must have a comma
+						if (!cleanNeighbor.endsWith(',')) {
+							neighborText = neighborText.replace(/(\s*)$/, ',$1');
+						}
+
+						// 2. Current text moves DOWN to the bottom -> Check if it lands at the final line
+						const isNeighborLastItem = (swapIdx === props.length - 1);
+						if (isNeighborLastItem && cleanCurrent.endsWith(',')) {
+							// Current item is now the last item! Strip its trailing comma cleanly
+							currentText = currentText.replace(/,(\s*)$/, '$1');
+						}
+					}
+
+					// Execute the balanced structural line swapping operation
+					if (isUp) {
+						const totalRange = new vscode.Range(neighborStartPos, currentEndPos);
+						b.replace(totalRange, currentText + '\n' + neighborText);
+					} else {
+						const totalRange = new vscode.Range(currentStartPos, neighborEndPos);
+						b.replace(totalRange, neighborText + '\n' + currentText);
+					}
+					continue;
+				}
+
 			}
 		});
-		vscode.window.showInformationMessage(`CherryPucker: ${action}`);
-		if (action === 'dupeProperty') {
-			const reparsed = findObjectAtCursor(editor);
-			if (reparsed) {
-				const p = findPropertyByKey(reparsed.objectNode, propName);
-				if (p) editor.selection = new vscode.Selection(offsetToPosition(editor.document, p.nameInsideQuoteRange[0]), offsetToPosition(editor.document, p.nameInsideQuoteRange[1]));
-			}
+		vscode.window.showInformationMessage(`CherryPucker: Completed -> ${action}`);
+
+		// Inject all gathered multi-cursors directly back onto the canvas after the document edit saves
+		if (sels.length > 0) {
+			editor.selections = sels;
+			editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
 		}
 		return;
 	}
@@ -655,14 +1102,14 @@ async function runPropertyCommand(action) {
 function findArrayAtCursor(editor) {
 	const parsed = parseTreeWithNodeAtCursor(editor);
 	if (!parsed || !parsed.node) return null; // FIX: Safeguard initial parsing bounds
-	
+
 	let node = parsed.node;
-	
+
 	// FIX: Protect the loop from climbing past the file root into undefined space
 	while (node && typeof node === 'object' && node.type !== 'array') {
 		node = node.parent;
 	}
-	
+
 	if (!node || node.type !== 'array') return null;
 	return { ...parsed, arrayNode: node, arrayValue: jsonc.getNodeValue(node) };
 }
@@ -673,8 +1120,9 @@ function getSelectedArrayIndices(editor, arrayNode) {
 	const ranges = sels.map((s) => [editor.document.offsetAt(s.start), editor.document.offsetAt(s.end)]);
 	const out = [];
 	(arrayNode.children || []).forEach((child, idx) => {
-		// FIX: Added 'child &&' to ensure the array node token is valid before intersection evaluation
+		// FIX: Immediately skip if the child array node token is missing/undefined
 		if (!child) return;
+
 		for (const [a, b] of ranges) {
 			if (nodeIntersectsSelection(child, a, b)) { out.push(idx); break; }
 		}
@@ -702,21 +1150,44 @@ async function pickPropertyValueFromObjects(objects) {
 async function runArrayCommand(action) {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return vscode.window.showWarningMessage('CherryPucker: No active editor.');
+
+	// 1. Context Collection using your custom AST tree parser helper
 	const found = findArrayAtCursor(editor);
-	if (!found || !Array.isArray(found.arrayValue)) return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside an array.');
+	if (!found || !Array.isArray(found.arrayValue)) {
+		return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside an array.');
+	}
+
+	// Calculate target array indices (handles explicit selection highlights vs whole array default fallback)
 	const selected = getSelectedArrayIndices(editor, found.arrayNode);
 	const idxs = selected || found.arrayValue.map((_, i) => i);
-	const objects = idxs.map((i) => found.arrayValue[i]).filter((v) => v && typeof v === 'object' && !Array.isArray(v));
-	if (!objects.length) return vscode.window.showWarningMessage('CherryPucker: No object items in target array range.');
+
+	// Filter down safely to the real JSON objects contained inside the array range
+	const objects = idxs
+		.map((i) => found.arrayValue[i])
+		.filter((v) => v && typeof v === 'object' && !Array.isArray(v));
+
+	if (!objects.length) {
+		return vscode.window.showWarningMessage('CherryPucker: No object items in target array range.');
+	}
+
+	// 2. Open the property matcher UI
 	const picked = await pickPropertyValueFromObjects(objects);
 	if (!picked) return;
 	const { key, value } = picked;
+
+	// Gather matching array indices based on the selected value criteria
 	const matches = idxs.filter((i) => {
 		const o = found.arrayValue[i];
 		return o && typeof o === 'object' && !Array.isArray(o) && String(o[key]) === String(value);
 	});
-	if (!matches.length) return vscode.window.showInformationMessage('CherryPucker: No matching objects found.');
 
+	if (!matches.length) {
+		return vscode.window.showInformationMessage('CherryPucker: No matching objects found.');
+	}
+
+	// ==========================================
+	// ACTION: COPY MATCHING OBJECTS FROM ARRAY
+	// ==========================================
 	if (action === 'copyObjectsFromArrayByPropertyValue') {
 		const text = matches.map((i) => JSON.stringify(found.arrayValue[i])).join('\n');
 		await vscode.env.clipboard.writeText(text);
@@ -725,37 +1196,59 @@ async function runArrayCommand(action) {
 	}
 
 	let next = [...found.arrayValue];
+
+	// ==========================================
+	// ACTION: DELETE / CUT OBJECTS FROM ARRAY
+	// ==========================================
 	if (action === 'deleteObjectsFromArrayByPropertyValue' || action === 'cutObjectsFromArrayByPropertyValue') {
 		if (action === 'cutObjectsFromArrayByPropertyValue') {
 			const text = matches.map((i) => JSON.stringify(found.arrayValue[i])).join('\n');
 			await vscode.env.clipboard.writeText(text);
 			notifyClipboard('Cut matching objects', text);
 		}
+		// Filter out all matched indices to delete them cleanly
 		next = next.filter((_, i) => !matches.includes(i));
 	}
+
+	// ==========================================
+	// ACTION: BULK SET PROPERTY VALUES IN ARRAY
+	// ==========================================
 	if (action === 'setObjectsArrayPropertyValue') {
 		const clip = await vscode.env.clipboard.readText();
 		let parsedClip;
-		try { parsedClip = JSON.parse(clip); } catch { parsedClip = clip; }
+		try {
+			parsedClip = JSON.parse(clip);
+		} catch {
+			parsedClip = clip;
+		}
 		for (const i of matches) {
 			next[i] = { ...next[i], [key]: parsedClip };
 		}
 	}
+
+	// ==========================================
+	// ACTION: SORT ARRAY OBJECTS (ASC / DESC)
+	// ==========================================
 	if (action === 'sortObjectArrayByPropertyValueAscending' || action === 'sortObjectArrayByPropertyValueDescending') {
 		const dir = action.endsWith('Descending') ? -1 : 1;
 		const targetSet = new Set(idxs);
 		const segment = idxs.map((i) => next[i]);
+
 		segment.sort((a, b) => String(a?.[key] ?? '').localeCompare(String(b?.[key] ?? '')) * dir);
+
 		let p = 0;
 		next = next.map((item, i) => (targetSet.has(i) ? segment[p++] : item));
 	}
 
+	// 3. Format and replace structural changes cleanly into the file
 	const baseIndent = getLineIndent(editor.document, found.arrayNode.offset);
 	const indentUnit = getIndentUnit(editor);
 	const replacement = formatWithBaseIndent(baseIndent, indentUnit, next);
+
 	await replaceRange(editor, found.arrayNode.offset, found.arrayNode.offset + found.arrayNode.length, replacement);
-	vscode.window.showInformationMessage(`CherryPucker: ${action}`);
+	vscode.window.showInformationMessage(`CherryPucker: Completed -> ${action}`);
 }
+
 
 async function runShowPickerForAllCommands() {
 	const suggestedKeyMap = new Map();
@@ -781,7 +1274,7 @@ async function runShowPickerForAllCommands() {
 async function runObjectCommand(action) {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return vscode.window.showWarningMessage('CherryPucker: No active editor.');
-	
+
 	const original = editor.selection;
 
 	// 1. Gather active context using your standard AST tree parser helper
@@ -798,71 +1291,269 @@ async function runObjectCommand(action) {
 
 	const documentText = editor.document.getText();
 
-	// ==========================================
-	// ACTION: COPY OBJECT(S)
-	// ==========================================
+	// ========================================================
+	// ACTION: ADAPTIVE CONTEXT-AWARE SMART SERIALIZED COPY
+	// ========================================================
 	if (action === 'copyObject') {
-		const objects = targetNodes.map(node => jsonc.getNodeValue(node));
 		const indent = getIndentUnit(editor);
-		
-		// If only one object, copy standalone. If multiple, copy as a clean JSON array string.
-		const finalOutput = objects.length === 1 
-			? JSON.stringify(objects[0], null, indent)
-			: JSON.stringify(objects, null, indent);
+		const rawText = editor.document.getText();
 
-		await vscode.env.clipboard.writeText(finalOutput);
-		notifyClipboard(objects.length === 1 ? 'Copied Object' : `Copied ${objects.length} Objects`, finalOutput);
+		// If we only have exactly 1 target, handle it standalone to avoid any outer array pollution
+		if (targetNodes.length === 1) {
+			const target = targetNodes[0];
+			const nodeVal = jsonc.getNodeValue(target.node);
+			let resultText = '';
+
+			if (target.type === 'ArrayContents') {
+				// If inside an array, serialize the child elements line-by-line with valid syntax commas
+				if (Array.isArray(nodeVal)) {
+					resultText = nodeVal.map(item => JSON.stringify(item, null, indent)).join(',\n');
+				} else {
+					resultText = JSON.stringify(nodeVal, null, indent);
+				}
+			} else {
+				// Full arrays, naked objects, and primitives keep their exact raw JSON format
+				resultText = JSON.stringify(nodeVal, null, indent);
+			}
+
+			await vscode.env.clipboard.writeText(resultText);
+			notifyClipboard('Copied Context Element', resultText);
+			restoreCursor(editor, original);
+			return;
+		}
+
+		// MULTI-CURSOR COMBINATION PIPELINE:
+		const finalOutputLines = [];
+
+		for (const target of targetNodes) {
+			const nodeVal = jsonc.getNodeValue(target.node);
+
+			if (target.type === 'ArrayContents') {
+				if (Array.isArray(nodeVal)) {
+					nodeVal.forEach(item => {
+						finalOutputLines.push(JSON.stringify(item, null, indent));
+					});
+				}
+			} else {
+				finalOutputLines.push(JSON.stringify(nodeVal, null, indent));
+			}
+		}
+
+		if (finalOutputLines.length === 0) {
+			return vscode.window.showWarningMessage('CherryPucker: No copyable JSON elements found at cursor locations.');
+		}
+
+		// Join multi-cursor strings or naked items together separated by commas to preserve valid data formatting
+		const finalOutputText = finalOutputLines.join(',\n');
+
+		await vscode.env.clipboard.writeText(finalOutputText);
+		notifyClipboard(`Copied ${finalOutputLines.length} Custom Context Elements`, finalOutputText);
 		restoreCursor(editor, original);
 		return;
 	}
 
-	// ==========================================
-	// ACTION: DUPLICATE OBJECT(S)
-	// ==========================================
+	// ========================================================
+	// ACTION: SMART SCREEN-AWARE SELECTION DUPLICATION
+	// ========================================================
 	if (action === 'dupeObject') {
-		// Sort nodes by offset ascending so they duplicate in the correct visual sequence
-		const sortedNodes = [...targetNodes].sort((a, b) => a.offset - b.offset);
-		
-		const finalNode = sortedNodes[sortedNodes.length - 1];
-		const finalInsertionIndex = finalNode.offset + finalNode.length;
-		
-		// FIX: Added optional chaining (?.) to prevent crashing if parent is undefined
-		const insideArray = finalNode.parent?.type === 'array';
-		
-		const blocksText = sortedNodes.map(n => documentText.slice(n.offset, n.offset + n.length)).join(insideArray ? ',\n' : '\n');
-		const finalTextToInsert = insideArray ? `,\n${blocksText}` : `\n${blocksText}`;
+		const document = editor.document;
+		const selections = editor.selections;
 
-		await editor.edit((b) => b.insert(offsetToPosition(editor.document, finalInsertionIndex), finalTextToInsert));
-		
-		const p = offsetToPosition(editor.document, finalInsertionIndex);
-		editor.selection = new vscode.Selection(p, p);
-		
-		notifyClipboard(`Duplicated ${sortedNodes.length} object(s)`, blocksText);
-		return;
+		const hasActiveSelection = selections.some(s => !s.isEmpty);
+
+		if (hasActiveSelection) {
+			// WORKFLOW A: USER SELECTION HIGHLIGHT
+			const sortedSelections = [...selections]
+				.filter(s => !s.isEmpty)
+				.sort((a, b) => a.start.line - b.start.line);
+
+			const startLine = sortedSelections[0].start.line;
+			let endLine = sortedSelections[sortedSelections.length - 1].end.line;
+
+			// Handle trailing newlines cleanly if selection stops at column 0 of the next line
+			if (endLine > startLine && sortedSelections[sortedSelections.length - 1].end.character === 0) {
+				endLine -= 1;
+			}
+
+			const startPos = new vscode.Position(startLine, 0);
+			const endLineText = document.lineAt(endLine).text;
+			const endPos = new vscode.Position(endLine, endLineText.length);
+
+			// 1. Read exactly what lines the user highlighted
+			const rawSelectedText = document.getText(new vscode.Range(startPos, endPos));
+
+			// 2. SCREEN-AWARE SYNTAX CHECK: Look at the actual line text on the screen
+			// Clean up trailing whitespace and comments to see if a comma already exists
+			const screenLineClean = endLineText.replace(/\/\/.*$/, '').replace(/\/\*[\s\S]*?\*\//, '').trim();
+
+			// Check if the selection text itself already has a comma inside it
+			const selectionLines = rawSelectedText.split(/\r?\n/);
+			const selectionEndsWithComma = selectionLines.length > 0 && selectionLines[selectionLines.length - 1].trim().endsWith(',');
+
+			let finalTextToInsert = '';
+
+			// If either the screen line OR your text selection already has a comma, do not inject another one
+			if (screenLineClean.endsWith(',') || selectionEndsWithComma) {
+				finalTextToInsert = '\n' + rawSelectedText;
+			} else {
+				// Inject the missing structural comma separator safely
+				finalTextToInsert = ',\n' + rawSelectedText;
+			}
+
+			// 3. Perform a single atomic text edit block operation
+			await editor.edit((b) => {
+				b.insert(endPos, finalTextToInsert);
+			});
+
+			// Re-anchor the active selection coordinates cleanly below the duplication
+			editor.selection = new vscode.Selection(endPos, endPos);
+			notifyClipboard(`Duplicated selected block lines (${startLine + 1}-${endLine + 1})`, rawSelectedText);
+			return;
+		} else {
+			// WORKFLOW B: MULTI-CURSOR OR SINGLE BLINKING CARET (FALLBACK)
+			const sortedTargets = [...targetNodes]
+				.filter(t => t && t.node && typeof t.node.offset === 'number')
+				.sort((a, b) => a.node.offset - b.node.offset);
+
+			if (sortedTargets.length === 0) return;
+
+			const firstNode = sortedTargets[0].node;
+			const finalNode = sortedTargets[sortedTargets.length - 1].node;
+
+			const startLine = document.positionAt(firstNode.offset).line;
+			const endLine = document.positionAt(finalNode.offset + finalNode.length).line;
+
+			const startPos = new vscode.Position(startLine, 0);
+			const endLineText = document.lineAt(endLine).text;
+			const endPos = new vscode.Position(endLine, endLineText.length);
+
+			let linesText = document.getText(new vscode.Range(startPos, endPos));
+			const insideArray = finalNode.parent?.type === 'array';
+			let prefix = '\n';
+
+			if (insideArray) {
+				const cleanEndText = endLineText.replace(/\/\/.*$/, '').replace(/\/\*[\s\S]*?\*\//, '').trim();
+				if (!cleanEndText.endsWith(',')) {
+					prefix = ',\n';
+					const baseIndent = getLineIndent(document, finalNode.offset);
+					linesText = linesText.split('\n').map((line, idx) => {
+						if (idx === 0) return baseIndent + line.trimStart();
+						return line;
+					}).join('\n');
+				}
+			}
+
+			await editor.edit((b) => {
+				b.insert(endPos, prefix + linesText);
+			});
+
+			editor.selection = new vscode.Selection(endPos, endPos);
+			notifyClipboard(`Duplicated ${sortedTargets.length} context element(s)`, linesText);
+			return;
+		}
 	}
 
-	// ==========================================
-	// ACTION: SORT OBJECT PROPERTIES (SHALLOW & DEEP)
-	// ==========================================
+	// ========================================================================
+	// ACTION: MULTI-CURSOR LAYOUT-SAFE OBJECT PROPERTIES SORTING (SHALLOW/DEEP)
+	// ========================================================================
 	if (action === 'sortObjectProperties' || action === 'sortObjectPropertiesDeep') {
 		const deep = action === 'sortObjectPropertiesDeep';
 
-		// Execute edits backwards (descending offset) so prior replacements don't invalidate downstream string boundaries!
-		const sortedNodes = [...targetNodes].sort((a, b) => b.offset - a.offset);
+		// ==========================================
+		// FIXED: GUARANTEED UNIQUE NODE SELECTION
+		// ==========================================
+		let activeSortNodes = [];
+		const hasActiveSelection = editor.selections.some(s => !s.isEmpty);
+
+		if (hasActiveSelection) {
+			// If text is highlighted, pull ALL individual object nodes from the selection block
+			const selectedNodes = uniqueByOffset(selectedArrayObjectNodes(editor, parsedAtCursor.root));
+			if (selectedNodes && selectedNodes.length > 0) {
+				activeSortNodes = selectedNodes.map(node => ({ type: 'NakedObject', node: node }));
+			}
+		} else {
+			// Fall back to your multi-cursor line context tracker if no drag selection is present
+			activeSortNodes = targetNodes;
+		}
+
+		// Double-check global deduplication by structural character offsets to strictly ban any overlapping ranges
+		const finalUniqueObjects = [];
+		const uniqueRangeRegistry = new Set();
+
+		for (const target of activeSortNodes) {
+			if (!target || !target.node || typeof target.node.offset !== 'number') continue;
+			
+			const rangeKey = `${target.node.offset}:${target.node.length}`;
+			if (!uniqueRangeRegistry.has(rangeKey)) {
+				uniqueRangeRegistry.add(rangeKey);
+				finalUniqueObjects.push(target);
+			}
+		}
+
+		// Execute edits backwards (descending offset) so prior replacements don't invalidate downstream character boundaries!
+		const sortedNodes = [...finalUniqueObjects].sort((a, b) => b.node.offset - a.node.offset);
+
+		let modifiedCount = 0;
 
 		await editor.edit((editBuilder) => {
-			for (const node of sortedNodes) {
-				const nodeVal = jsonc.getNodeValue(node);
-				const sorted = sortObjectKeys(nodeVal, deep);
-				const replacement = formatWithBaseIndent(getLineIndent(editor.document, node.offset), getIndentUnit(editor), sorted);
-				
-				editBuilder.replace(rangeFromOffsets(editor.document, node.offset, node.offset + node.length), replacement);
+			for (const target of sortedNodes) {
+				const node = target.node;
+				const props = getObjectProperties(node);
+				if (props.length <= 1) continue; // Skip if object has 0 or 1 keys
+
+				// 1. Gather all individual lines mapping to properties inside this object block
+				const propertyLineBlocks = props.map(p => {
+					const startLine = editor.document.positionAt(p.propNode.offset).line;
+					const endLine = editor.document.positionAt(p.propNode.offset + p.propNode.length).line;
+					
+					const startPos = new vscode.Position(startLine, 0);
+					const endLineText = editor.document.lineAt(endLine).text;
+					const endPos = new vscode.Position(endLine, endLineText.length);
+					
+					return {
+						key: p.key,
+						startPos,
+						endPos,
+						rawText: editor.document.getText(new vscode.Range(startPos, endPos))
+					};
+				});
+
+				// 2. Sort the line blocks alphabetically based on their property key strings
+				const originalOrderBlocks = [...propertyLineBlocks];
+				propertyLineBlocks.sort((a, b) => a.key.localeCompare(b.key));
+
+				// 3. COMMA SANITIZATION: Rebalance syntax tokens for the new order sequence
+				propertyLineBlocks.forEach((block, idx) => {
+					let cleanText = block.rawText.trimEnd();
+					const isLastItem = (idx === propertyLineBlocks.length - 1);
+
+					if (isLastItem) {
+						if (cleanText.endsWith(',')) {
+							block.rawText = block.rawText.replace(/,(\s*)$/, '$1');
+						}
+					} else {
+						if (!cleanText.endsWith(',')) {
+							block.rawText = block.rawText.replace(/(\s*)$/, ',$1');
+						}
+					}
+				});
+
+				// 4. Fire atomic segment replacements line-by-line mapping from top-to-bottom
+				originalOrderBlocks.forEach((origBlock, idx) => {
+					const incomingBlockText = propertyLineBlocks[idx].rawText;
+					editBuilder.replace(new vscode.Range(origBlock.startPos, origBlock.endPos), incomingBlockText);
+				});
+
+				modifiedCount++;
 			}
 		});
 		
-		vscode.window.showInformationMessage(`CherryPucker: Sorted properties across ${targetNodes.length} object(s)${deep ? ' (deep)' : ''}`);
+		if (modifiedCount > 0) {
+			vscode.window.showInformationMessage(`CherryPucker: Sorted properties across ${modifiedCount} object(s)`);
+		}
 		return;
 	}
+
 }
 
 function activate(context) {
@@ -899,7 +1590,7 @@ function activate(context) {
 	reg('cherryPucker.removeSuggestedKeybindings', () => runRemoveSuggestedBindings());
 }
 
-function deactivate() {}
+function deactivate() { }
 
 module.exports = { activate, deactivate };
 // file: C:\_o\__\ce-cherrypucker\extension.js

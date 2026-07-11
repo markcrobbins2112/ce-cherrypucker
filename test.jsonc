@@ -69,43 +69,50 @@
 		"gamma": "middle"
 	},
 	// Designed for array commands that pick by a simple property/value.
-	"users": [
-		{
+	"users": [ // if I a between the colon and the bracket then I should get an array of all these objects, if I am on the other side of the colon then I should get the parent of users
+				// it gave me an extra outer array which I dont want
+	    // if I am here I shoould get all these objects without an array
+		// these need commas
+		{ // if I am here I should get this object
 			"id": 100,
-			"team": "core",
-			"status": "active",
-			"priority": 3,
-			"name": "Ari",
-			"region": "NA",
-			"meta": {
+			"meta": { // If I am after the colon then I should get the value of the meta object '{}' 
 				"tier": "gold",
-				"tags": [
+				"tags": [ // if I am after the colon then I get the array (it gave me an extra outer array), 
+				          // if I am in the array then I just get the strings or content
+						  // it gave me naked strings, I need them quoted and comma
 					"ops",
 					"oncall"
 				]
-			}
-		},
-		{
+			},
+			"name": "Ari",// name: Ari id: 100
+			"priority": 3,
+			"region": "NA",
+			"status": "active",
+			"team": "core"
+		}, // if I am here I am 'in the array' so I get contents of the array without an array
+		// basically every cursor location qualifies objects or values, and you try to turn it into reasonable json even if it means arraying things or offering things naked of arrays
+		// do you think that will work?
+		{ // 101
 			"id": 101,
-			"team": "core",
-			"status": "inactive",
-			"priority": 1,
-			"name": "Bea",
-			"region": "EU",
 			"meta": {
 				"tier": "silver",
 				"tags": [
 					"support"
 				]
-			}
+			},
+			"name": "Bea", //me,			
+			"priority": 1,
+			"region": "EU",
+			"status": "inactive",
+			"team": "core"
 		},
-		{
-			"id": 102,
-			"team": "growth",
-			"status": "active",
+		{ // 102
 			"priority": 2,
-			"name": "Cy",
+			"team": "growth",
+			"name": "Cy", // you
+			"status": "active",
 			"region": "NA",
+			"id": 102,
 			"meta": {
 				"tier": "gold",
 				"tags": [
