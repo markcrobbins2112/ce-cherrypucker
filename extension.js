@@ -1,3 +1,4 @@
+// file: C:\_o\__\ce-cherrypucker\extension.js
 const vscode = require('vscode');
 const jsonc = require('jsonc-parser');
 const fs = require('fs');
@@ -824,3 +825,4 @@ function activate(context) {
 function deactivate() {}
 
 module.exports = { activate, deactivate };
+// file: C:\_o\__\ce-cherrypucker\extension.js
