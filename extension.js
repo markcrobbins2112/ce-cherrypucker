@@ -758,33 +758,87 @@ async function runShowPickerForAllCommands() {
 async function runObjectCommand(action) {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return vscode.window.showWarningMessage('CherryPucker: No active editor.');
+	
 	const original = editor.selection;
-	const found = findObjectAtCursor(editor);
-	if (!found) return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object.');
-	const objectStart = found.objectNode.offset;
-	const objectEnd = found.objectNode.offset + found.objectNode.length;
-	const objectText = editor.document.getText(rangeFromOffsets(editor.document, objectStart, objectEnd));
 
+	// 1. Gather active context using your standard AST tree parser helper
+	const parsedAtCursor = parseTreeWithNodeAtCursor(editor);
+	if (!parsedAtCursor || !parsedAtCursor.root) {
+		return vscode.window.showWarningMessage('CherryPucker: Failed to parse file structure.');
+	}
+
+	// 2. Extract structural target arrays using your smart selector helper
+	const targetNodes = getTargetObjectNodes(editor, parsedAtCursor);
+	if (!targetNodes || targetNodes.length === 0) {
+		return vscode.window.showWarningMessage('CherryPucker: Place the cursor inside a JSON object or select object data.');
+	}
+
+	const documentText = editor.document.getText();
+
+	// ==========================================
+	// ACTION: COPY OBJECT(S)
+	// ==========================================
 	if (action === 'copyObject') {
-		await vscode.env.clipboard.writeText(objectText);
-		notifyClipboard('Copied object', objectText);
+		const objects = targetNodes.map(node => jsonc.getNodeValue(node));
+		const indent = getIndentUnit(editor);
+		
+		// If only one object, copy standalone. If multiple, copy as a clean JSON array string.
+		const finalOutput = objects.length === 1 
+			? JSON.stringify(objects[0], null, indent)
+			: JSON.stringify(objects, null, indent);
+
+		await vscode.env.clipboard.writeText(finalOutput);
+		notifyClipboard(objects.length === 1 ? 'Copied Object' : `Copied ${objects.length} Objects`, finalOutput);
 		restoreCursor(editor, original);
 		return;
 	}
+
+	// ==========================================
+	// ACTION: DUPLICATE OBJECT(S)
+	// ==========================================
 	if (action === 'dupeObject') {
-		await vscode.env.clipboard.writeText(objectText);
-		await editor.edit((b) => b.insert(offsetToPosition(editor.document, objectEnd), objectText));
-		const p = offsetToPosition(editor.document, objectEnd);
+		// Sort nodes by offset ascending so they duplicate in the correct visual sequence
+		const sortedNodes = [...targetNodes].sort((a, b) => a.offset - b.offset);
+		
+		const finalNode = sortedNodes[sortedNodes.length - 1];
+		const finalInsertionIndex = finalNode.offset + finalNode.length;
+		
+		// Check if we are inside a JSON array to map out trailing commas correctly
+		const insideArray = finalNode.parent && finalNode.parent.type === 'array';
+		
+		const blocksText = sortedNodes.map(n => documentText.slice(n.offset, n.offset + n.length)).join(insideArray ? ',\n' : '\n');
+		const finalTextToInsert = insideArray ? `,\n${blocksText}` : `\n${blocksText}`;
+
+		await editor.edit((b) => b.insert(offsetToPosition(editor.document, finalInsertionIndex), finalTextToInsert));
+		
+		const p = offsetToPosition(editor.document, finalInsertionIndex);
 		editor.selection = new vscode.Selection(p, p);
-		notifyClipboard('Duplicated object', objectText);
+		
+		notifyClipboard(`Duplicated ${sortedNodes.length} object(s)`, blocksText);
 		return;
 	}
+
+	// ==========================================
+	// ACTION: SORT OBJECT PROPERTIES (SHALLOW & DEEP)
+	// ==========================================
 	if (action === 'sortObjectProperties' || action === 'sortObjectPropertiesDeep') {
 		const deep = action === 'sortObjectPropertiesDeep';
-		const sorted = sortObjectKeys(found.objectValue, deep);
-		const replacement = formatWithBaseIndent(getLineIndent(editor.document, objectStart), getIndentUnit(editor), sorted);
-		await replaceRange(editor, objectStart, objectEnd, replacement);
-		vscode.window.showInformationMessage(`CherryPucker: Sorted object properties${deep ? ' (deep)' : ''}`);
+
+		// Execute edits backwards (descending offset) so prior replacements don't invalidate downstream string boundaries!
+		const sortedNodes = [...targetNodes].sort((a, b) => b.offset - a.offset);
+
+		await editor.edit((editBuilder) => {
+			for (const node of sortedNodes) {
+				const nodeVal = jsonc.getNodeValue(node);
+				const sorted = sortObjectKeys(nodeVal, deep);
+				const replacement = formatWithBaseIndent(getLineIndent(editor.document, node.offset), getIndentUnit(editor), sorted);
+				
+				editBuilder.replace(rangeFromOffsets(editor.document, node.offset, node.offset + node.length), replacement);
+			}
+		});
+		
+		vscode.window.showInformationMessage(`CherryPucker: Sorted properties across ${targetNodes.length} object(s)${deep ? ' (deep)' : ''}`);
+		return;
 	}
 }
 
