@@ -37,6 +37,8 @@
     "node_modules/jsonc-parser"
   ],
   "scripts": {
+    "build": "echo \"Build complete\"",
+    "start": "node server.js",
     "lint": "echo \"No lint configured yet\"",
     "test": "echo \"No tests configured yet\"",
     "package": "vsce package"

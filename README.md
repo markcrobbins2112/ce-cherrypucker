@@ -3,18 +3,22 @@ title: README
 ---
 
 # CherryPucker
+<a id="a-cherrypucker"></a>[TOC](#toc-cherrypucker)
 
-CherryPucker is a VS Code extension for copying JSON data quickly using configurable text templates.
-
-It can:
-- Copy from one of 10 reusable templates.
-- Copy a selected object value directly.
-- Copy a selected object value wrapped in quotes.
-
-![icon](icon.png)
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/markcrobbins)
-
+<!-- TOC location -->
+## 🔍 Table of Contents
+<!-- Maintained by script -->
+- [CherryPucker](#a-cherrypucker) <a id="toc-cherrypucker"></a> ^toc-cherrypucker
+  - [Installation](#a-installation) <a id="toc-installation"></a> ^toc-installation
+  - [Commands](#a-commands) <a id="toc-commands"></a> ^toc-commands
+  - [Configuration](#a-configuration) <a id="toc-configuration"></a> ^toc-configuration
+  - [Development](#a-development) <a id="toc-development"></a> ^toc-development
+  - [Suggested Keybindings](#a-suggestedkeybindings) <a id="toc-suggestedkeybindings"></a> ^toc-suggestedkeybindings
+  - [Publishing](#a-publishing) <a id="toc-publishing"></a> ^toc-publishing
+  - [License](#a-license) <a id="toc-license"></a> ^toc-license
+---
 ## Installation
+<a id="a-installation"></a>[TOC](#toc-installation)
 
 Install from the VS Code Marketplace, or install a local `.vsix` package:
 
@@ -23,6 +27,7 @@ code --install-extension cherrypucker-0.0.1.vsix
 ```
 
 ## Commands
+<a id="a-commands"></a>[TOC](#toc-commands)
 
 Open the Command Palette and run:
 
@@ -42,6 +47,7 @@ Open the Command Palette and run:
 - `CherryPucker: Remove Suggested Keybindings`
 
 ## Configuration
+<a id="a-configuration"></a>[TOC](#toc-configuration)
 
 Set template values in `Settings` with these keys:
 
@@ -65,6 +71,7 @@ Example template:
 Placeholders are resolved from properties found in the JSON object at your cursor.
 
 ## Development
+<a id="a-development"></a>[TOC](#toc-development)
 
 ```bash
 npm install
@@ -74,6 +81,7 @@ npm run package
 The package command generates a `.vsix` using `vsce`.
 
 ## Suggested Keybindings
+<a id="a-suggestedkeybindings"></a>[TOC](#toc-suggestedkeybindings)
 
 `cherryPucker.copyObject`, `alt+insert o`
 `cherryPucker.copyObjectsFromArrayByPropertyValue`, `alt+insert ctrl+v`
@@ -114,11 +122,13 @@ The package command generates a `.vsix` using `vsce`.
 `cherryPucker.sortObjectPropertiesDeep`, `alt+insert ctrl+shift+p`
 
 ## Publishing
+<a id="a-publishing"></a>[TOC](#toc-publishing)
 
 1. Bump `version` in `package.json`.
 2. Run `npm run package`.
 3. Publish with your extension publisher credentials.
 
 ## License
+<a id="a-license"></a>[TOC](#toc-license)
 
 MIT

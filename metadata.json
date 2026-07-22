@@ -1,6 +1,8 @@
 {
-  "name": "zip",
-  "description": "",
+  "name": "CherryPucker",
+  "description": "VS Code extension for copying JSON-driven templates and property values.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
